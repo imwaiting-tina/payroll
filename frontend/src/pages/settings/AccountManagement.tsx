@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Space, message, Tag, Popconfirm, Card } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ROLE_LABELS, ROLE_COLORS, ROLE_OPTIONS, type Role } from '../../utils/permissions';
+import { AUTH_URL } from '../../config';
 
-const SUPABASE_URL = 'https://avuldnywmiflbmmlgmas.supabase.co';
 const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2dWxkbnl3bWlmbGJtbWxnbWFzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjMzNjQ0OCwiZXhwIjoyMTAxOTEyNDQ4fQ.S7e1lJxysz9v0MoXaizgMy-wbSMHxmZUBFTj_tVABnQ';
 
 const AccountManagementPage: React.FC = () => {
@@ -18,7 +18,7 @@ const AccountManagementPage: React.FC = () => {
     setLoading(true);
     try {
       // 通过 Supabase Auth 的管理 API 列出用户
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=100`, {
+      const res = await fetch(`${AUTH_URL}/admin/users?per_page=100`, {
         headers: {
           apikey: SERVICE_ROLE_KEY,
           Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
@@ -48,7 +48,7 @@ const AccountManagementPage: React.FC = () => {
   const handleCreate = async () => {
     const values = await form.validateFields();
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      const res = await fetch(`${AUTH_URL}/admin/users`, {
         method: 'POST',
         headers: {
           apikey: SERVICE_ROLE_KEY,
@@ -81,7 +81,7 @@ const AccountManagementPage: React.FC = () => {
     try {
       // 如果要把某个人设为 admin，且当前有另一个 admin，则当前 admin 降为 hr_staff
       if (role === 'admin' && currentUserId && currentUserId !== userId) {
-        await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${currentUserId}`, {
+        await fetch(`${AUTH_URL}/admin/users/${currentUserId}`, {
           method: 'PUT',
           headers: {
             apikey: SERVICE_ROLE_KEY,
@@ -98,7 +98,7 @@ const AccountManagementPage: React.FC = () => {
         return;
       }
 
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+      const res = await fetch(`${AUTH_URL}/admin/users/${userId}`, {
         method: 'PUT',
         headers: {
           apikey: SERVICE_ROLE_KEY,
@@ -126,7 +126,7 @@ const AccountManagementPage: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+      const res = await fetch(`${AUTH_URL}/admin/users/${userId}`, {
         method: 'PUT',
         headers: {
           apikey: SERVICE_ROLE_KEY,
@@ -148,7 +148,7 @@ const AccountManagementPage: React.FC = () => {
   // 停用/启用账号
   const handleToggleBan = async (user: any) => {
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+      const res = await fetch(`${AUTH_URL}/admin/users/${user.id}`, {
         method: 'PUT',
         headers: {
           apikey: SERVICE_ROLE_KEY,

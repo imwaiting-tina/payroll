@@ -32,6 +32,8 @@ jobs:
         working-directory: frontend
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          # GitHub Pages 上没有同源代理，继续走腾讯云 SCF 代理（Cloudflare 部署才用同源）
+          VITE_API_PROXY: https://1466594404-6b17scw4l5.ap-guangzhou.tencentscf.com
         run: npm run build
 
       - uses: actions/configure-pages@v4

@@ -16,12 +16,22 @@ const normalizeBase = (path: string) => (path.endsWith('/') ? path : `${path}/`)
 
 const base = normalizeBase(process.env.VITE_BASE || `/${repoName}/`);
 
+/** Supabase 主域 —— 本地开发时把同源 API 请求转发到这里（等价于线上的 Pages Functions 代理） */
+const SUPABASE_ORIGIN = 'https://avuldnywmiflbmmlgmas.supabase.co';
+
 export default defineConfig({
   plugins: [react()],
   base,
   server: {
     port: 3000,
     open: true,
+    // 前端 config.ts 默认用「同源」API（PROXY_BASE_URL = ''），
+    // 开发环境下由这里的 proxy 把 /rest /auth /storage 转发到 Supabase。
+    proxy: {
+      '/rest': { target: SUPABASE_ORIGIN, changeOrigin: true, secure: true },
+      '/auth': { target: SUPABASE_ORIGIN, changeOrigin: true, secure: true },
+      '/storage': { target: SUPABASE_ORIGIN, changeOrigin: true, secure: true },
+    },
   },
   build: {
     outDir: 'dist',

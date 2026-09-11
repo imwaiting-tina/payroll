@@ -66,10 +66,13 @@ if ! grep -q 'src="/assets/' dist/index.html; then
 fi
 echo "✅ 资源前缀自检通过：$(grep -o 'src="[^"]*"' dist/index.html | head -1)"
 
-# 把 Pages 的 _redirects/_headers 拷进 dist（Cloudflare Pages 读取它们）
+# 把 Pages 的 _redirects/_headers/_worker.js 拷进 dist（Cloudflare Pages 读取它们）
 cp "$CF_DIR/pages/_redirects" dist/_redirects 2>/dev/null || true
 cp "$CF_DIR/pages/_headers" dist/_headers 2>/dev/null || true
-
+# _worker.js = Advanced Mode 同源代理：把 /rest /auth /storage 转发到 Supabase
+cp "$CF_DIR/pages/_worker.js" dist/_worker.js
+[ -f dist/_worker.js ] || { echo "❌ 缺少 dist/_worker.js（同源 API 代理）"; exit 1; }
+echo "✅ 同源 API 代理已就位：dist/_worker.js"
 echo ""
 echo "===== 3/3 部署前端到 Cloudflare Pages ($PAGES_PROJECT) ====="
 # 项目不存在时先创建（幂等，已存在会报错但被忽略）
