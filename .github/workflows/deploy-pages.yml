@@ -1,8 +1,11 @@
 name: Deploy to GitHub Pages
 
+# 发布地址：https://<user>.github.io/<repo>/
+# 触发：推送 gitee-pages 分支（与上游 HRO-Jay/PMS 保持一致），也可手动运行
 on:
   push:
-    branches: [gitee-pages]
+    branches: [gitee-pages, main]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -25,8 +28,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build
+      - name: Build (base = /<repo>/)
         working-directory: frontend
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
         run: npm run build
 
       - uses: actions/configure-pages@v4

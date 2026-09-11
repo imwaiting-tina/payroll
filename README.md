@@ -85,6 +85,34 @@ git push origin main
 # → 数据库迁移自动推送到 Supabase
 ```
 
+## 🌐 静态站点（GitHub Pages / Gitee Pages）
+
+前端是纯静态 SPA（`HashRouter`），可以直接托管在 Pages 上：
+
+| 站点 | 地址 | 说明 |
+|------|------|------|
+| GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `gitee-pages` 分支后由 `.github/workflows/deploy-pages.yml` 自动构建部署 |
+| Gitee Pages | `https://<Gitee 用户名>.gitee.io/payroll/` | 用仓库自带的 `docs/` 目录发布（Gitee 仓库 → 服务 → Gitee Pages → 分支 `gitee-pages` + 目录 `docs`） |
+
+> 首次启用 GitHub Pages 时，需在 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。
+
+Pages 站点挂在仓库子路径 `/payroll/` 下，`frontend/vite.config.ts` 会按仓库名自动计算 `base`，
+也可以显式覆盖（部署在根目录时用 `VITE_BASE=/`）：
+
+```bash
+cd frontend
+npm ci
+
+# GitHub Pages / Gitee Pages：资源前缀 /payroll/，产物在 frontend/dist
+npm run build
+
+# 刷新 Gitee Pages 用的发布目录（产物写入仓库根 docs/）
+npm run build:docs
+
+# 自定义域名 / Vercel 等根目录部署
+VITE_BASE=/ npm run build
+```
+
 ## 📁 项目结构
 
 ```
