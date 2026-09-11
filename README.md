@@ -128,6 +128,35 @@ VITE_BASE=/ npm run build
 > `https://imwaiting-tina.github.io/payroll/#/`。
 > 管理员按上面的两步切换到 **GitHub Actions** 之后，可以删除这三个文件，之后推送 `gitee-pages` 即自动部署。
 
+## ☁️ Cloudflare 部署（Worker + Pages）
+
+前端与 API 代理都可托管在 Cloudflare（替代 GitHub Pages + 腾讯云 SCF）：
+
+| 资源 | 地址 | 说明 |
+|------|------|------|
+| Pages（前端） | `https://payroll-bz2.pages.dev`、`https://staff.hro.net.cn` | 项目名 `payroll`，已绑定自定义域名 `staff.hro.net.cn` |
+| Worker（API 代理） | `https://supabase-proxy.hro-payroll.workers.dev` | 把 `/rest/v1`、`/auth/v1`、`/storage/v1` 转发到 Supabase 并处理 CORS |
+
+一键部署（先在仓库根目录建 `.env.cloudflare`，写入 `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN`，
+可选 `CLOUDFLARE_PAGES_PROJECT_NAME`，该文件已在 `.gitignore` 中）：
+
+```bash
+bash cloudflare/deploy-cloudflare.sh
+# 1) 部署 Worker supabase-proxy（输出 workers.dev 地址）
+# 2) 构建前端（Cloudflare Pages 在根路径 → VITE_BASE=/），并自检资源前缀
+# 3) 部署到 Pages 项目（默认 payroll，可覆盖）
+```
+
+> **两个坑（脚本已处理）**
+> 1. Pages 站点在根路径，`VITE_BASE` 必须是 `/`；Git Bash(MSYS) 会把 `/` 自动转成 `D:/Git/`，
+>    脚本用 `MSYS_NO_PATHCONV` / `MSYS2_ENV_CONV_EXCL` 关掉，并在构建后自检 `dist/index.html`。
+> 2. 账号若还没有 workers.dev 子域，需先注册（本仓库当前为 `hro-payroll`）：
+>    Dashboard → Workers & Pages 首次打开会自动创建，或 `PUT /accounts/{id}/workers/subdomain`。
+>
+> **国内可达性**：`*.workers.dev` 在部分网络会被 DNS 污染导致不可达，
+> 若要给国内用户用，建议把代理改为 **Pages Functions**（同域 `https://staff.hro.net.cn/rest/v1/...`），
+> 或把域名接入 Cloudflare 后给 Worker 绑自定义域名。
+
 ## 📁 项目结构
 
 ```
