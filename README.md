@@ -85,6 +85,49 @@ git push origin main
 # → 数据库迁移自动推送到 Supabase
 ```
 
+## 🌐 静态站点（GitHub Pages / Gitee Pages）
+
+前端是纯静态 SPA（`HashRouter`），可以直接托管在 Pages 上：
+
+| 站点 | 地址 | 说明 |
+|------|------|------|
+| GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `gitee-pages` 分支后由 `.github/workflows/deploy-pages.yml` 自动构建部署 |
+| Gitee Pages | `https://<Gitee 用户名>.gitee.io/payroll/` | 用仓库自带的 `docs/` 目录发布（Gitee 仓库 → 服务 → Gitee Pages → 分支 `gitee-pages` + 目录 `docs`） |
+
+> **首次启用需要仓库管理员做两处设置（普通协作者无权限）：**
+> 1. **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**；
+> 2. **Settings → Environments → github-pages → Deployment branches and tags** 里加入 `gitee-pages`
+>    （否则工作流会报 `Branch "gitee-pages" is not allowed to deploy to github-pages due to environment protection rules`）。
+>
+> 管理员也可以直接跑脚本一键完成（并触发一次部署）：
+>
+> ```bash
+> gh auth login                        # 换用管理员账号
+> bash scripts/setup-pages.sh          # 默认 imwaiting-tina/payroll + gitee-pages
+> ```
+
+Pages 站点挂在仓库子路径 `/payroll/` 下，`frontend/vite.config.ts` 会按仓库名自动计算 `base`，
+也可以显式覆盖（部署在根目录时用 `VITE_BASE=/`）：
+
+```bash
+cd frontend
+npm ci
+
+# GitHub Pages / Gitee Pages：资源前缀 /payroll/，产物在 frontend/dist
+npm run build
+
+# 刷新 Gitee Pages 用的发布目录（产物写入仓库根 docs/）
+npm run build:docs
+
+# 自定义域名 / Vercel 等根目录部署
+VITE_BASE=/ npm run build
+```
+
+> **过渡说明**：当前 fork 的 Pages 仍是旧模式（`Deploy from a branch: main /`，且账号没有管理员权限改设置），
+> 因此 `main` 分支根目录额外放了一份构建产物（`index.html` + `assets/` + `.nojekyll`）先让站点可用：
+> `https://imwaiting-tina.github.io/payroll/#/`。
+> 管理员按上面的两步切换到 **GitHub Actions** 之后，可以删除这三个文件，之后推送 `gitee-pages` 即自动部署。
+
 ## 📁 项目结构
 
 ```

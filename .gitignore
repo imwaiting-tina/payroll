@@ -13,6 +13,7 @@ venv/
 .env
 .env.local
 .env.production
+.env.cloudflare
 
 # IDE
 .vscode/
@@ -43,3 +44,6 @@ htmlcov/
 # Supabase
 supabase/.branches/
 supabase/.temp/
+
+# Vite 临时缓存
+vite.config.ts.timestamp-*.mjs

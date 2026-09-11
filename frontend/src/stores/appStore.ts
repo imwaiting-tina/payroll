@@ -6,7 +6,7 @@ interface AppStore {
   selectedCompany: string | null;
   setSelectedCompany: (code: string | null) => void;
 
-  // 当前薪资月份
+  // 当前薪资月份（全局月份选择器，所有模块共用）
   currentPeriod: string;
   setCurrentPeriod: (period: string) => void;
 
@@ -24,7 +24,7 @@ interface AppStore {
 }
 
 const now = new Date();
-const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
+const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
 export const useStore = create<AppStore>((set) => ({
   selectedCompany: null,
@@ -42,3 +42,4 @@ export const useStore = create<AppStore>((set) => ({
   loading: false,
   setLoading: (loading) => set({ loading }),
 }));
+

@@ -1,119 +1,76 @@
 import api from './client';
 
-// Supabase 表名小写，用 PostgREST 查询语法
-// select 用 * 返回所有列
+// ====== 公司简称对应表 ======
+export const fetchCompanyMapping = () =>
+  api.get('/company_mapping?select=*&order=sort_order');
 
-/* ====== 公司 ====== */
+// ====== 公司（兼容旧接口，返回简称对应表） ======
 export const fetchCompanies = () =>
-  api.get('/companies?select=*&order=code').then(r => ({
-    data: { total: r.data.length, companies: r.data }
+  api.get('/company_mapping?select=*&order=sort_order').then(r => ({
+    data: {
+      total: r.data.length,
+      companies: r.data.map((c: any) => ({
+        code: c.display_value,
+        full_name: c.full_name,
+        short_name: c.display_value,
+        region: c.region,
+      })),
+    }
   }));
 
-/* ====== 员工 ====== */
-export const fetchEmployees = (params?: { company_code?: string; is_active?: boolean; search?: string }) => {
+// ====== 员工花名册 ======
+export const fetchEmployees = (params?: { pay_company?: string; is_active?: boolean; search?: string }) => {
   let query = '/employees?select=*';
-  if (params?.company_code) query += `&company_code=eq.${params.company_code}`;
-  if (params?.is_active !== undefined) query += `&is_active=eq.${params.is_active}`;
-  if (params?.search) query += `&or=(name.ilike.*${params.search}*,employee_no.ilike.*${params.search}*)`;
-  query += '&order=employee_no';
+  if (params?.pay_company) query += `&pay_company=eq.${encodeURIComponent(params.pay_company)}`;
+  if (params?.search) query += `&or=(name.ilike.*${params.search}*)`;
+  query += '&order=id';
   return api.get(query);
 };
 
 export const createEmployee = (data: any) =>
-  api.post('/employees', { ...data, is_active: true });
+  api.post('/employees', data);
+
 export const updateEmployee = (id: number, data: any) =>
   api.patch(`/employees?id=eq.${id}`, data);
+
 export const deleteEmployee = (id: number) =>
-  api.patch(`/employees?id=eq.${id}`, { is_active: false });
+  api.patch(`/employees?id=eq.${id}`, { is_disabled: true });
 
-/* ====== 薪资 ====== */
-export const fetchSalaryRecords = (period: string, company_code?: string) => {
-  let query = '/salary_records?select=*';
-  query += `&period=eq.${period}`;
-  if (company_code) {
-    // 需要 join employees 表
-    return api.get(`/salary_records?select=*,employees!inner(company_code)&period=eq.${period}&employees.company_code=eq.${company_code}`)
-      .then(r => ({ data: r.data }));
-  }
-  return api.get(query);
-};
+// ====== 福利套 ======
+export const fetchWelfareSets = () =>
+  api.get('/welfare_sets?select=*&order=name');
 
-export const runPayroll = (data: { period: string; force_recalc?: boolean }) =>
-  api.post('/rpc/run_payroll_cycle', { p_period: data.period });
+// ====== 社保记录 ======
+export const fetchSocialRecords = (period: string) =>
+  api.get(`/social_records?select=*&period=eq.${period}&order=unique_hash`);
 
-export const exportSalary = (period: string, company_code?: string) =>
-  Promise.resolve({ data: new Blob() }); // placeholder
+// ====== 考勤记录 ======
+export const fetchAttendanceRecords = (period: string) =>
+  api.get(`/attendance_records?select=*&period=eq.${period}&order=unique_hash`);
 
-/* ====== 社保 ====== */
-export const fetchSocialPolicies = (company_code?: string) => {
-  let query = '/social_policies?select=*&order=company_code';
-  if (company_code) query += `&company_code=eq.${company_code}`;
-  return api.get(query).then(r => ({
-    data: { total: r.data.length, policies: r.data }
-  }));
-};
+export const upsertAttendance = (data: any) =>
+  api.post('/attendance_records', data);
 
-/* ====== 考勤 ====== */
-export const fetchAttendance = (period: string, employee_id?: number) => {
-  let query = `/attendance_records?select=*,employees!inner(employee_no,name)&period=eq.${period}`;
-  if (employee_id) query += `&employee_id=eq.${employee_id}`;
-  return api.get(query).then(r => ({
-    data: {
-      period,
-      total: r.data.length,
-      records: r.data.map((rec: any) => ({
-        ...rec,
-        employee_no: rec.employees?.employee_no || '',
-        name: rec.employees?.name || '',
-      }))
-    }
-  }));
-};
+// ====== 薪资记录 ======
+export const fetchSalaryRecords = (period: string) =>
+  api.get(`/salary_records?select=*&period=eq.${period}&order=unique_hash`);
 
-export const upsertAttendance = (data: {
-  employee_id: number; period: string; sick_days?: number; personal_days?: number;
-  annual_leave?: number; overtime_days?: number; adjustment_amount?: number;
-}) => api.post('/attendance_records', data);
-
-/* ====== 报表 ====== */
+// ====== 报表/数据总览 ======
 export const fetchCompanySummary = (period: string) =>
-  api.get(`/salary_records?select=employees(company_code,companies(full_name,region)),wage_subtotal,personal_welfare,company_welfare,tax_amount,net_pay,total_cost&period=eq.${period}`)
+  api.get(`/salary_records?select=wage_subtotal,net_pay,total_cost,unique_hash&period=eq.${period}`)
     .then(r => {
-      // Aggregate by company from flat records
-      const byCompany: Record<string, any> = {};
-      r.data.forEach((rec: any) => {
-        const c = rec.employees?.companies;
-        if (!c) return;
-        const code = rec.employees.company_code;
-        if (!byCompany[code]) {
-          byCompany[code] = {
-            company_code: code,
-            company_full_name: c.full_name,
-            region: c.region,
-            employee_count: 0,
-            total_wages: 0, total_personal_welfare: 0, total_company_welfare: 0,
-            total_tax: 0, total_net_pay: 0, total_cost: 0,
-          };
-        }
-        const agg = byCompany[code];
-        agg.employee_count++;
-        agg.total_wages += rec.wage_subtotal || 0;
-        agg.total_personal_welfare += rec.personal_welfare || 0;
-        agg.total_company_welfare += rec.company_welfare || 0;
-        agg.total_tax += rec.tax_amount || 0;
-        agg.total_net_pay += rec.net_pay || 0;
-        agg.total_cost += rec.total_cost || 0;
-      });
-      const companies = Object.values(byCompany);
+      // Flat summary — just return the data for now, dashboard will aggregate
+      const records = r.data;
+      const totalWages = records.reduce((s: number, rec: any) => s + (rec.wage_subtotal || 0), 0);
+      const totalNetPay = records.reduce((s: number, rec: any) => s + (rec.net_pay || 0), 0);
+      const totalCost = records.reduce((s: number, rec: any) => s + (rec.total_cost || 0), 0);
       return {
         data: {
           period,
-          generated_at: new Date().toISOString(),
-          companies,
-          grand_total_wages: companies.reduce((s: number, c: any) => s + c.total_wages, 0),
-          grand_total_tax: companies.reduce((s: number, c: any) => s + c.total_tax, 0),
-          grand_total_net_pay: companies.reduce((s: number, c: any) => s + c.total_net_pay, 0),
-          grand_total_cost: companies.reduce((s: number, c: any) => s + c.total_cost, 0),
+          employee_count: records.length,
+          total_wages: totalWages,
+          total_net_pay: totalNetPay,
+          total_cost: totalCost,
         }
       };
     });

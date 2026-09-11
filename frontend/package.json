@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:docs": "vite build --outDir ../docs --emptyOutDir",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -13,9 +14,14 @@
     "antd": "^5.12.8",
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
+    "echarts": "^6.1.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.0",
+    "xlsx": "^0.18.5",
     "zustand": "^4.4.7"
   },
   "devDependencies": {

@@ -1,0 +1,32 @@
+/* 全局样式：表格横向滚动条固定可见 */
+/* antd Table 的横向滚动条默认在表格体底部，会随纵向滚动消失。
+   这里通过让 .ant-table-body 的横向滚动条始终显示，并加一个容器底部的常驻滚动条来固定。 */
+
+/* 1. 让表格体的横向滚动条始终可见（webkit 浏览器） */
+.ant-table-body::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.ant-table-body::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 5px;
+}
+.ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #909399;
+}
+.ant-table-body::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 5px;
+}
+
+/* 2. Firefox 滚动条 */
+.ant-table-body {
+  scrollbar-width: thin;
+  scrollbar-color: #c0c4cc #f0f0f0;
+}
+
+/* 3. 表格容器：横向滚动条常驻显示（antd 的 .ant-table-content 包裹横向滚动，
+   用 sticky 定位让分页器 + 滚动条固定在容器可视底部） */
+.ant-table-wrapper {
+  position: relative;
+}

@@ -1,15 +1,17 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/lib/locale/zh_CN';
 import AppLayout from './components/AppLayout';
 import LoginPage from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import EmployeesPage from './pages/Employees';
-import PayrollPage from './pages/PayrollRun';
+import SocialPage from './pages/Social';
 import AttendancePage from './pages/Attendance';
-import CompaniesPage from './pages/Companies';
-import ReportsPage from './pages/Reports';
+import AttendanceRulesPage from './pages/attendance/AttendanceRules';
+import PayrollPage from './pages/PayrollRun';
+import TaxPage from './pages/Tax';
+import AdditionalSalaryPage from './pages/AdditionalSalary';
 import SettingsPage from './pages/Settings';
 
 // 简单的认证守卫
@@ -27,7 +29,7 @@ const App: React.FC = () => {
         borderRadius: 6,
       },
     }}>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/*" element={
@@ -36,10 +38,12 @@ const App: React.FC = () => {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/employees" element={<EmployeesPage />} />
+                  <Route path="/social/*" element={<SocialPage />} />
                   <Route path="/payroll" element={<PayrollPage />} />
+                  <Route path="/tax" element={<TaxPage />} />
+                  <Route path="/additional" element={<AdditionalSalaryPage />} />
                   <Route path="/attendance" element={<AttendancePage />} />
-                  <Route path="/companies" element={<CompaniesPage />} />
-                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/attendance/rules" element={<AttendanceRulesPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
@@ -47,7 +51,7 @@ const App: React.FC = () => {
             </AuthGuard>
           } />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </ConfigProvider>
   );
 };
