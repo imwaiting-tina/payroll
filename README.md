@@ -91,16 +91,15 @@ git push origin main
 
 | 站点 | 地址 | 说明 |
 |------|------|------|
-| GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `main`（或 `gitee-pages`）后由 `.github/workflows/deploy-pages.yml` 自动构建部署，构建时注入 `VITE_BASE=/<仓库名>/` |
+| GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `gitee-pages` 分支后由 `.github/workflows/deploy-pages.yml` 自动构建部署 |
 | Gitee Pages | `https://<Gitee 用户名>.gitee.io/payroll/` | 用仓库自带的 `docs/` 目录发布（Gitee 仓库 → 服务 → Gitee Pages → 分支 `gitee-pages` + 目录 `docs`） |
 
-> **部署权限说明（2026-09 实测）**
-> - 推送 `main`：`.github/workflows/deploy-pages.yml` 可正常构建并部署 ✅（`github-pages` 环境已允许 `main`），
->   所以**日常只需 push `main` 即可更新线上站点**。
-> - 推送 `gitee-pages`：需要仓库管理员在 **Settings → Environments → github-pages → Deployment branches and tags**
->   里加入 `gitee-pages`，否则会报
->   `Branch "gitee-pages" is not allowed to deploy to github-pages due to environment protection rules`。
->   管理员可一键完成（含触发一次部署）：
+> **首次启用需要仓库管理员做两处设置（普通协作者无权限）：**
+> 1. **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**；
+> 2. **Settings → Environments → github-pages → Deployment branches and tags** 里加入 `gitee-pages`
+>    （否则工作流会报 `Branch "gitee-pages" is not allowed to deploy to github-pages due to environment protection rules`）。
+>
+> 管理员也可以直接跑脚本一键完成（并触发一次部署）：
 >
 > ```bash
 > gh auth login                        # 换用管理员账号
@@ -124,13 +123,39 @@ npm run build:docs
 VITE_BASE=/ npm run build
 ```
 
-> **仓库根目录的兜底产物**：`main` 根目录保留了 `index.html` + `assets/` + `.nojekyll`
-> （由 `npm run build:docs` 生成、资源前缀 `/payroll/`），用于 Pages 仍处于
-> 「Deploy from a branch: main /」旧模式时的兜底发布；正常发布走上面的 Actions 工作流，
-> 管理员把 **Settings → Pages → Source** 切成 **GitHub Actions** 后即可删除这三个文件。
+> **过渡说明**：当前 fork 的 Pages 仍是旧模式（`Deploy from a branch: main /`，且账号没有管理员权限改设置），
+> 因此 `main` 分支根目录额外放了一份构建产物（`index.html` + `assets/` + `.nojekyll`）先让站点可用：
+> `https://imwaiting-tina.github.io/payroll/#/`。
+> 管理员按上面的两步切换到 **GitHub Actions** 之后，可以删除这三个文件，之后推送 `gitee-pages` 即自动部署。
+
+## ☁️ Cloudflare 部署（Worker + Pages）
+
+前端与 API 代理都可托管在 Cloudflare（替代 GitHub Pages + 腾讯云 SCF）：
+
+| 资源 | 地址 | 说明 |
+|------|------|------|
+| Pages（前端） | `https://payroll-bz2.pages.dev`、`https://staff.hro.net.cn` | 项目名 `payroll`，已绑定自定义域名 `staff.hro.net.cn` |
+| Worker（API 代理） | `https://supabase-proxy.hro-payroll.workers.dev` | 把 `/rest/v1`、`/auth/v1`、`/storage/v1` 转发到 Supabase 并处理 CORS |
+
+一键部署（先在仓库根目录建 `.env.cloudflare`，写入 `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN`，
+可选 `CLOUDFLARE_PAGES_PROJECT_NAME`，该文件已在 `.gitignore` 中）：
+
+```bash
+bash cloudflare/deploy-cloudflare.sh
+# 1) 部署 Worker supabase-proxy（输出 workers.dev 地址）
+# 2) 构建前端（Cloudflare Pages 在根路径 → VITE_BASE=/），并自检资源前缀
+# 3) 部署到 Pages 项目（默认 payroll，可覆盖）
+```
+
+> **两个坑（脚本已处理）**
+> 1. Pages 站点在根路径，`VITE_BASE` 必须是 `/`；Git Bash(MSYS) 会把 `/` 自动转成 `D:/Git/`，
+>    脚本用 `MSYS_NO_PATHCONV` / `MSYS2_ENV_CONV_EXCL` 关掉，并在构建后自检 `dist/index.html`。
+> 2. 账号若还没有 workers.dev 子域，需先注册（本仓库当前为 `hro-payroll`）：
+>    Dashboard → Workers & Pages 首次打开会自动创建，或 `PUT /accounts/{id}/workers/subdomain`。
 >
-> **已修复**：`工资表/payroll-app` 原先是一个断链的子模块引用（有 gitlink 但缺 `.gitmodules`），
-> 会让 legacy Pages 构建报 `No url found for submodule path` 而失败，现已移除该引用。
+> **国内可达性**：`*.workers.dev` 在部分网络会被 DNS 污染导致不可达，
+> 若要给国内用户用，建议把代理改为 **Pages Functions**（同域 `https://staff.hro.net.cn/rest/v1/...`），
+> 或把域名接入 Cloudflare 后给 Worker 绑自定义域名。
 
 ## 📁 项目结构
 
