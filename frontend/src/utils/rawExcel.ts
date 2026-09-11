@@ -1,3 +1,5 @@
+import { API_BASE_URL, STORAGE_URL, SCF_CONFIG } from '../config';
+
 /**
  * 原始表格（原始 Excel）上传/下载/预览 — 基于 Supabase Storage + 备注映射表
  *
@@ -10,8 +12,6 @@
  *   - 存储文件名用系统英文安全名  {module}_{period}_{时间戳}.xlsx
  *   - 中文备注存到 raw_excel_notes 表，展示/下载时用备注
  */
-const SUPABASE_URL = 'https://avuldnywmiflbmmlgmas.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2dWxkbnl3bWlmbGJtbWxnbWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMzY0NDgsImV4cCI6MjEwMTkxMjQ0OH0.8qqzH3zMc274Di-TK_6huMhrOWppJI1L3tjIfcBV2ts';
 
 export type RawModule = 'payroll' | 'attendance';
 
@@ -26,7 +26,7 @@ function getToken(): string | null {
 function getHeaders(): Record<string, string> {
   const token = getToken();
   const headers: Record<string, string> = {
-    apikey: ANON_KEY,
+    apikey: SCF_CONFIG.supabaseAnonKey,
     'Content-Type': 'application/json',
   };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -48,7 +48,7 @@ function objectPath(module: RawModule, period: string, filename: string): string
 /** 取存储对象的公开下载 URL */
 export function getRawExcelUrl(module: RawModule, period: string, filename: string): string {
   const path = objectPath(module, period, filename);
-  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
+  return `${STORAGE_URL}/object/public/${bucket}/${path}`;
 }
 
 /**
@@ -68,10 +68,10 @@ export async function uploadRawExcel(
   const path = objectPath(module, period, safeName);
 
   // 1. 上传文件到 Storage
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+  const res = await fetch(`${STORAGE_URL}/object/${bucket}/${path}`, {
     method: 'POST',
     headers: {
-      apikey: ANON_KEY,
+      apikey: SCF_CONFIG.supabaseAnonKey,
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
       'x-upsert': 'true',
@@ -85,7 +85,7 @@ export async function uploadRawExcel(
 
   // 2. 写入备注映射
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/${NOTES_TABLE}`, {
+    await fetch(`${API_BASE_URL}/${NOTES_TABLE}`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ module, period, object_name: safeName, note }),
@@ -106,7 +106,7 @@ export async function listRawExcel(
   period: string
 ): Promise<{ name: string; id: string; note: string }[]> {
   // 1. 列 Storage 对象
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${bucket}`, {
+  const res = await fetch(`${STORAGE_URL}/object/list/${bucket}`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ prefix: `${module}/${period}/` }),
@@ -118,7 +118,7 @@ export async function listRawExcel(
   let noteMap: Record<string, string> = {};
   try {
     const q = `?select=object_name,note&module=eq.${module}&period=eq.${period}`;
-    const nr = await fetch(`${SUPABASE_URL}/rest/v1/${NOTES_TABLE}${q}`, { headers: getHeaders() });
+    const nr = await fetch(`${API_BASE_URL}/${NOTES_TABLE}${q}`, { headers: getHeaders() });
     if (nr.ok) {
       const notes = await nr.json();
       noteMap = {};
@@ -171,9 +171,9 @@ export async function deleteRawExcel(
   const path = objectPath(module, period, filename);
 
   // 1. 删除 Storage 对象
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+  const res = await fetch(`${STORAGE_URL}/object/${bucket}/${path}`, {
     method: 'DELETE',
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
+    headers: { apikey: SCF_CONFIG.supabaseAnonKey, Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
     const t = await res.text();
@@ -183,7 +183,7 @@ export async function deleteRawExcel(
   // 2. 删除备注映射
   try {
     const q = `?module=eq.${module}&period=eq.${period}&object_name=eq.${encodeURIComponent(filename)}`;
-    await fetch(`${SUPABASE_URL}/rest/v1/${NOTES_TABLE}${q}`, {
+    await fetch(`${API_BASE_URL}/${NOTES_TABLE}${q}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
