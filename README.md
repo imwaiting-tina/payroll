@@ -91,15 +91,16 @@ git push origin main
 
 | 站点 | 地址 | 说明 |
 |------|------|------|
-| GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `gitee-pages` 分支后由 `.github/workflows/deploy-pages.yml` 自动构建部署 |
+| GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `main`（或 `gitee-pages`）后由 `.github/workflows/deploy-pages.yml` 自动构建部署，构建时注入 `VITE_BASE=/<仓库名>/` |
 | Gitee Pages | `https://<Gitee 用户名>.gitee.io/payroll/` | 用仓库自带的 `docs/` 目录发布（Gitee 仓库 → 服务 → Gitee Pages → 分支 `gitee-pages` + 目录 `docs`） |
 
-> **首次启用需要仓库管理员做两处设置（普通协作者无权限）：**
-> 1. **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**；
-> 2. **Settings → Environments → github-pages → Deployment branches and tags** 里加入 `gitee-pages`
->    （否则工作流会报 `Branch "gitee-pages" is not allowed to deploy to github-pages due to environment protection rules`）。
->
-> 管理员也可以直接跑脚本一键完成（并触发一次部署）：
+> **部署权限说明（2026-09 实测）**
+> - 推送 `main`：`.github/workflows/deploy-pages.yml` 可正常构建并部署 ✅（`github-pages` 环境已允许 `main`），
+>   所以**日常只需 push `main` 即可更新线上站点**。
+> - 推送 `gitee-pages`：需要仓库管理员在 **Settings → Environments → github-pages → Deployment branches and tags**
+>   里加入 `gitee-pages`，否则会报
+>   `Branch "gitee-pages" is not allowed to deploy to github-pages due to environment protection rules`。
+>   管理员可一键完成（含触发一次部署）：
 >
 > ```bash
 > gh auth login                        # 换用管理员账号
@@ -123,10 +124,13 @@ npm run build:docs
 VITE_BASE=/ npm run build
 ```
 
-> **过渡说明**：当前 fork 的 Pages 仍是旧模式（`Deploy from a branch: main /`，且账号没有管理员权限改设置），
-> 因此 `main` 分支根目录额外放了一份构建产物（`index.html` + `assets/` + `.nojekyll`）先让站点可用：
-> `https://imwaiting-tina.github.io/payroll/#/`。
-> 管理员按上面的两步切换到 **GitHub Actions** 之后，可以删除这三个文件，之后推送 `gitee-pages` 即自动部署。
+> **仓库根目录的兜底产物**：`main` 根目录保留了 `index.html` + `assets/` + `.nojekyll`
+> （由 `npm run build:docs` 生成、资源前缀 `/payroll/`），用于 Pages 仍处于
+> 「Deploy from a branch: main /」旧模式时的兜底发布；正常发布走上面的 Actions 工作流，
+> 管理员把 **Settings → Pages → Source** 切成 **GitHub Actions** 后即可删除这三个文件。
+>
+> **已修复**：`工资表/payroll-app` 原先是一个断链的子模块引用（有 gitlink 但缺 `.gitmodules`），
+> 会让 legacy Pages 构建报 `No url found for submodule path` 而失败，现已移除该引用。
 
 ## 📁 项目结构
 
