@@ -123,6 +123,11 @@ npm run build:docs
 VITE_BASE=/ npm run build
 ```
 
+> **过渡说明**：当前 fork 的 Pages 仍是旧模式（`Deploy from a branch: main /`，且账号没有管理员权限改设置），
+> 因此 `main` 分支根目录额外放了一份构建产物（`index.html` + `assets/` + `.nojekyll`）先让站点可用：
+> `https://imwaiting-tina.github.io/payroll/#/`。
+> 管理员按上面的两步切换到 **GitHub Actions** 之后，可以删除这三个文件，之后推送 `gitee-pages` 即自动部署。
+
 ## 📁 项目结构
 
 ```
