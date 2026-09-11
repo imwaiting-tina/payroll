@@ -94,7 +94,17 @@ git push origin main
 | GitHub Pages | `https://<GitHub 用户名>.github.io/payroll/#/` | 推送 `gitee-pages` 分支后由 `.github/workflows/deploy-pages.yml` 自动构建部署 |
 | Gitee Pages | `https://<Gitee 用户名>.gitee.io/payroll/` | 用仓库自带的 `docs/` 目录发布（Gitee 仓库 → 服务 → Gitee Pages → 分支 `gitee-pages` + 目录 `docs`） |
 
-> 首次启用 GitHub Pages 时，需在 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。
+> **首次启用需要仓库管理员做两处设置（普通协作者无权限）：**
+> 1. **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**；
+> 2. **Settings → Environments → github-pages → Deployment branches and tags** 里加入 `gitee-pages`
+>    （否则工作流会报 `Branch "gitee-pages" is not allowed to deploy to github-pages due to environment protection rules`）。
+>
+> 管理员也可以直接跑脚本一键完成（并触发一次部署）：
+>
+> ```bash
+> gh auth login                        # 换用管理员账号
+> bash scripts/setup-pages.sh          # 默认 imwaiting-tina/payroll + gitee-pages
+> ```
 
 Pages 站点挂在仓库子路径 `/payroll/` 下，`frontend/vite.config.ts` 会按仓库名自动计算 `base`，
 也可以显式覆盖（部署在根目录时用 `VITE_BASE=/`）：
