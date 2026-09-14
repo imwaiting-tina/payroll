@@ -98,8 +98,8 @@ const SettingsPage: React.FC = () => {
 
       <Card title="部署信息" style={{ marginBottom: 16 }}>
         <Typography.Paragraph>
-          <strong>前端：</strong>GitHub Pages（国内可访问）<br />
-          <strong>代理：</strong>腾讯云 SCF 云函数（函数 URL 反向代理 Supabase）<br />
+          <strong>前端：</strong>Cloudflare Pages（staff.hro.net.cn，国内可访问）<br />
+          <strong>代理：</strong>Cloudflare Pages 同源代理（_worker.js 转发 /rest /auth /storage 到 Supabase）<br />
           <strong>数据库：</strong>Supabase (PostgreSQL 15)<br />
           <strong>前端框架：</strong>React 18 + TypeScript + Ant Design 5<br />
           <strong>后端：</strong>Python FastAPI + SQLAlchemy 2.0
