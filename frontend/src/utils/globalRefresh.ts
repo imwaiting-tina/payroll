@@ -9,7 +9,7 @@
  *
  * 已锁定（冻结）的记录一律跳过，不覆盖。
  */
-import api from '../api/client';
+import api, { bulkUpsert } from '../api/client';
 import { calcAttendance, parseAttendanceRules, DEFAULT_ATTENDANCE_RULES } from './attendanceCalc';
 import { calcSocial, calcHousingFund } from './welfareCalc';
 import { calcIncomeTax, calcServiceTax, calcInternTax } from './taxCalc';
@@ -47,8 +47,8 @@ async function refreshAttendance(period: string): Promise<RefreshStepResult> {
   const empMap: Record<string, any> = {};
   empRes.data.forEach((e: any) => { empMap[e.unique_hash] = e; });
 
-  let success = 0;
   let skipped = 0;
+  const rows: any[] = [];
   for (const rec of recRes.data) {
     if (isLocked(rec)) { skipped++; continue; }
     try {
@@ -78,7 +78,9 @@ async function refreshAttendance(period: string): Promise<RefreshStepResult> {
         adjust_type: rec.adjust_type,
         adjust_amount: rec.adjust_amount,
       });
-      const calcFields = {
+      rows.push({
+        unique_hash: rec.unique_hash,
+        period,
         sick_pay_rate: result.sick_pay_rate,
         sick_amount: result.sick_amount,
         personal_amount: result.personal_amount,
@@ -87,12 +89,11 @@ async function refreshAttendance(period: string): Promise<RefreshStepResult> {
         on_off_adjust: result.on_off_adjust,
         attendance_adjust_total: result.attendance_adjust_total,
         data_status: '已计算',
-      };
-      await api.patch(`/attendance_records?id=eq.${rec.id}`, calcFields);
-      success++;
+      });
     } catch { skipped++; }
   }
-  return { step: '考勤', success, skipped };
+  await bulkUpsert('attendance_records', rows);
+  return { step: '考勤', success: rows.length, skipped };
 }
 
 /** 2. 社保一键计算 */
@@ -107,8 +108,8 @@ async function refreshSocial(period: string): Promise<RefreshStepResult> {
   const hMap: Record<string, any> = {};
   hRes.data.forEach((h: any) => { hMap[h.code] = h; });
 
-  let success = 0;
   let skipped = 0;
+  const rows: any[] = [];
   for (const rec of recRes.data) {
     if (isLocked(rec)) { skipped++; continue; }
     try {
@@ -142,7 +143,9 @@ async function refreshSocial(period: string): Promise<RefreshStepResult> {
         data_status = (!rec.adj_reason) ? '调整原因缺失' : (!rec.adj_start_month || !rec.adj_end_month) ? '调整期间缺失' : '含调整';
       }
 
-      const payload = {
+      rows.push({
+        unique_hash: rec.unique_hash,
+        period,
         social_status: sSet.code === 'SI-00' ? '不参保' : '参保',
         housing_status: hSet.code === 'HF-00' ? '不缴存' : '缴存',
         pension_p_amt: social?.pension_p || 0,
@@ -165,12 +168,11 @@ async function refreshSocial(period: string): Promise<RefreshStepResult> {
         company_total: round2(companySocial + companyHousing),
         data_status,
         last_calc_time: new Date().toISOString(),
-      };
-      await api.patch(`/employee_welfare_records?id=eq.${rec.id}`, payload);
-      success++;
+      });
     } catch { skipped++; }
   }
-  return { step: '社保', success, skipped };
+  await bulkUpsert('employee_welfare_records', rows);
+  return { step: '社保', success: rows.length, skipped };
 }
 
 /** 生成从当年1月到某月的所有月份（个税年度内） */
@@ -223,8 +225,8 @@ async function refreshNormalTax(period: string): Promise<RefreshStepResult> {
     });
   });
 
-  let success = 0;
   let skipped = 0;
+  const rows: any[] = [];
   for (const e of empRes.data) {
     if (!isActiveInPeriod(e, period)) continue;
     if (isLocked(attMap[e.unique_hash])) { skipped++; continue; }
@@ -313,16 +315,11 @@ async function refreshNormalTax(period: string): Promise<RefreshStepResult> {
         quick_deduction: result.quick_deduction,
         monthly_tax: result.monthly_tax,
       };
-      const existing = await api.get(`/tax_monthly_calcs?unique_hash=eq.${e.unique_hash}&period=eq.${period}`);
-      if (existing.data.length > 0) {
-        await api.patch(`/tax_monthly_calcs?id=eq.${existing.data[0].id}`, payload);
-      } else {
-        await api.post('/tax_monthly_calcs', payload);
-      }
-      success++;
+      rows.push(payload);
     } catch { skipped++; }
   }
-  return { step: '个税月度', success, skipped };
+  await bulkUpsert('tax_monthly_calcs', rows);
+  return { step: '个税月度', success: rows.length, skipped };
 }
 
 /** 4. 实习生个税 */
@@ -351,8 +348,8 @@ async function refreshInternTax(period: string): Promise<RefreshStepResult> {
     return (py - sy) * 12 + (pm - sm) + 1;
   };
 
-  let success = 0;
   let skipped = 0;
+  const rows: any[] = [];
   for (const e of empRes.data) {
     if (!isActiveInPeriod(e, period)) continue;
     try {
@@ -382,16 +379,11 @@ async function refreshInternTax(period: string): Promise<RefreshStepResult> {
         cumul_tax_paid: cumulTaxPaid,
         monthly_tax: result.monthly_tax,
       };
-      const existing = await api.get(`/tax_monthly_calcs?unique_hash=eq.${e.unique_hash}&period=eq.${period}`);
-      if (existing.data.length > 0) {
-        await api.patch(`/tax_monthly_calcs?id=eq.${existing.data[0].id}`, payload);
-      } else {
-        await api.post('/tax_monthly_calcs', payload);
-      }
-      success++;
+      rows.push(payload);
     } catch { skipped++; }
   }
-  return { step: '实习生个税', success, skipped };
+  await bulkUpsert('tax_monthly_calcs', rows);
+  return { step: '实习生个税', success: rows.length, skipped };
 }
 
 /** 5. 薪资刷新同步 */
@@ -412,8 +404,8 @@ async function refreshPayroll(period: string): Promise<RefreshStepResult> {
   const taxMap: Record<string, any> = {};
   taxRes.data.forEach((r: any) => { taxMap[r.unique_hash] = r; });
 
-  let success = 0;
   let skipped = 0;
+  const rows: any[] = [];
   for (const e of empRes.data) {
     if (!isActiveInPeriod(e, period)) continue;
     const att = attMap[e.unique_hash];
@@ -477,16 +469,11 @@ async function refreshPayroll(period: string): Promise<RefreshStepResult> {
         total_cost: totalCost,
         data_status: '已计算',
       };
-      const existing = await api.get(`/salary_records?unique_hash=eq.${e.unique_hash}&period=eq.${period}`);
-      if (existing.data.length > 0) {
-        await api.patch(`/salary_records?id=eq.${existing.data[0].id}`, payload);
-      } else {
-        await api.post('/salary_records', payload);
-      }
-      success++;
+      rows.push(payload);
     } catch { skipped++; }
   }
-  return { step: '薪资', success, skipped };
+  await bulkUpsert('salary_records', rows);
+  return { step: '薪资', success: rows.length, skipped };
 }
 
 /** 全局刷新（按依赖顺序执行所有模块），onStep 每完成一步回调一次，用于显示进度 */

@@ -12,7 +12,8 @@ import { useStore } from '../stores/appStore';
 import { canSubmit, canApprove } from '../utils/permissions';
 import { fetchApprovalStatus } from '../utils/approvalStatus';
 import { ensureRoster } from '../utils/roster';
-import api from '../api/client';
+import api, { bulkUpsert } from '../api/client';
+import { recalcAllTaxes } from '../utils/taxRecalc';
 
 const { RangePicker } = DatePicker;
 
@@ -270,11 +271,14 @@ const EmployeesPage: React.FC = () => {
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
       if (data.length === 0) { message.info('未找到有效数据'); return; }
 
-      let added = 0, updated = 0, dupSkipped = 0, failed = 0;
+      let failed = 0;
       const failReasons: string[] = [];
+      const rows: any[] = [];
+      const rowKeys: string[] = [];
       // 开始导入，显示进度
       setImportProgress({ done: 0, total: data.length, importing: true });
 
+      // 第一步：纯本地校验/归一化，收集要写入的行（不再逐行查库）
       for (const row of data) {
         try {
           // 1. 发薪公司归一化：全称→简称
@@ -336,9 +340,7 @@ const EmployeesPage: React.FC = () => {
           }
           const uniqueHash = calculatedHash;
 
-          // 8. 查重（按 unique_hash + 当月 period）
-          const existing = await api.get(`/employees?unique_hash=eq.${uniqueHash}&period=eq.${period}`);
-          const payload = {
+          rows.push({
             name: row.name,
             status,
             cost_center: row.cost_center,
@@ -355,15 +357,8 @@ const EmployeesPage: React.FC = () => {
             leave_date: leaveDate,
             unique_hash: uniqueHash,
             period,   // 写入当前月
-          };
-
-          if (existing.data.length > 0) {
-            await api.patch(`/employees?id=eq.${existing.data[0].id}`, payload);
-            updated++;
-          } else {
-            await api.post('/employees', payload);
-            added++;
-          }
+          });
+          rowKeys.push(uniqueHash);
         } catch {
           failed++;
         }
@@ -371,10 +366,20 @@ const EmployeesPage: React.FC = () => {
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
 
+      // 第二步：一次查库拿当月已存在的唯一值 → 区分新增/更新，再一次批量 upsert 落库
+      let added = 0, updated = 0;
+      if (rows.length > 0) {
+        const existingRes = await api.get(`/employees?select=unique_hash&period=eq.${period}`);
+        const existingSet = new Set(existingRes.data.map((r: any) => r.unique_hash));
+        updated = rowKeys.filter((k) => existingSet.has(k)).length;
+        added = rowKeys.length - updated;
+        await bulkUpsert('employees', rows);
+        await recalcAllTaxes(period); // 花名册导入后自动触发下游个税计算
+      }
+
       const parts: string[] = [];
       if (added > 0) parts.push(`新增 ${added} 人`);
       if (updated > 0) parts.push(`更新 ${updated} 人`);
-      if (dupSkipped > 0) parts.push(`重复跳过 ${dupSkipped} 人`);
       if (failed > 0) parts.push(`失败 ${failed} 人`);
       message.info(`导入完成：${parts.join('，')}${failReasons.length ? '。' + failReasons.slice(0, 5).join('；') : ''}`);
       loadEmployees();
@@ -406,11 +411,9 @@ const EmployeesPage: React.FC = () => {
   const doSubmitApproval = async () => {
     try {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
-      const ids = recs.data.map((r: any) => r.id);
-      if (ids.length === 0) { message.warning('该月暂无花名册数据'); return; }
-      // 逐条更新（POSTGREST 不支持批量 patch 任意字段，用 in 逐条）
-      const updated = ids.map((id: number) => api.patch(`/employees?id=eq.${id}`, { data_status: '已提交审批' }));
-      await Promise.all(updated);
+      if (recs.data.length === 0) { message.warning('该月暂无花名册数据'); return; }
+      // 同 body 批量更新：一次 PATCH 应用到当月全部行
+      await api.patch(`/employees?period=eq.${period}`, { data_status: '已提交审批' });
       message.success('花名册已提交审批');
       loadEmployees();
     } catch (e: any) {
@@ -423,10 +426,8 @@ const EmployeesPage: React.FC = () => {
   const doApprove = async () => {
     try {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
-      const ids = recs.data.map((r: any) => r.id);
-      if (ids.length === 0) { message.warning('该月暂无花名册数据'); return; }
-      const updated = ids.map((id: number) => api.patch(`/employees?id=eq.${id}`, { data_status: '已锁定' }));
-      await Promise.all(updated);
+      if (recs.data.length === 0) { message.warning('该月暂无花名册数据'); return; }
+      await api.patch(`/employees?period=eq.${period}`, { data_status: '已锁定' });
       message.success('花名册审批通过，当月花名册已冻结');
       loadEmployees();
     } catch (e: any) {
@@ -441,10 +442,8 @@ const EmployeesPage: React.FC = () => {
     setUnlocking(true);
     try {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
-      const ids = recs.data.map((r: any) => r.id);
-      if (ids.length === 0) { message.warning('该月暂无花名册数据'); return; }
-      const updated = ids.map((id: number) => api.patch(`/employees?id=eq.${id}`, { data_status: '正常' }));
-      await Promise.all(updated);
+      if (recs.data.length === 0) { message.warning('该月暂无花名册数据'); return; }
+      await api.patch(`/employees?period=eq.${period}`, { data_status: '正常' });
       message.success('花名册已解锁，需重新提交审批');
       setUnlockModal(false);
       loadEmployees();
@@ -459,9 +458,7 @@ const EmployeesPage: React.FC = () => {
   const doReject = async () => {
     try {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
-      const ids = recs.data.map((r: any) => r.id);
-      const updated = ids.map((id: number) => api.patch(`/employees?id=eq.${id}`, { data_status: '草稿' }));
-      await Promise.all(updated);
+      await api.patch(`/employees?period=eq.${period}`, { data_status: '草稿' });
       message.success('已退回修改');
       loadEmployees();
     } catch (e: any) {

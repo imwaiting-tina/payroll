@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Button, Space, message, Upload, Input, Select, Progress } from 'antd';
 import { DownloadOutlined, UploadOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
+import { recalcAllTaxes } from '../../utils/taxRecalc';
+import { useStore } from '../../stores/appStore';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
 import { isActiveInPeriod } from '../../utils/employee';
@@ -36,6 +38,7 @@ const TaxOpeningPage: React.FC = () => {
   const [allRecords, setAllRecords] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
+  const period = useStore(s => s.currentPeriod);
 
   // 导入进度
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; importing: boolean }>({ done: 0, total: 0, importing: false });
@@ -103,6 +106,7 @@ const TaxOpeningPage: React.FC = () => {
       if (data.length === 0) { message.info('未找到有效数据'); return; }
 
       let success = 0;
+      const rows: any[] = [];
       const failures: string[] = [];
       setImportProgress({ done: 0, total: data.length, importing: true });
       for (const row of data) {
@@ -121,18 +125,15 @@ const TaxOpeningPage: React.FC = () => {
           }
           // 剔除展示字段
           const { employee_name, pay_company, ...dbRow } = row;
-          const existing = await api.get(`/tax_opening_balances?unique_hash=eq.${row.unique_hash}`);
-          if (existing.data.length > 0) {
-            await api.patch(`/tax_opening_balances?id=eq.${existing.data[0].id}`, dbRow);
-          } else {
-            await api.post('/tax_opening_balances', dbRow);
-          }
+          rows.push(dbRow);
           success++;
         } catch {
           failures.push(`${row.employee_name || '?'}：导入失败`);
         }
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
+      await bulkUpsert('tax_opening_balances', rows, 'unique_hash');
+      await recalcAllTaxes(period); // 导入完成后自动触发下游个税计算
       if (failures.length > 0) {
         message.warning(`导入完成：成功 ${success} 条，失败 ${failures.length} 条。${failures.slice(0, 8).join('；')}`);
       } else {

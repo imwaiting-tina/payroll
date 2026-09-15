@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Space, Input, message, Button, Tag, Select } from 'antd';
 import { CalculatorOutlined, SaveOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
 import { isActiveInPeriod } from '../../utils/employee';
@@ -98,30 +98,20 @@ const ServiceTaxPage: React.FC = () => {
 
   // 计算并保存劳务个税
   const handleCalc = async () => {
-    let success = 0;
+    const rows: any[] = [];
+    const monthNumber = parseInt(period.split('-')[1]) || 1;
     setCalcProgress({ done: 0, total: records.length, active: true, label: '正在计算劳务个税' });
     for (const r of records) {
       try {
         const wageSubtotal = Number(r.wage_subtotal || 0);
         const tax = calcServiceTax(wageSubtotal);
         const monthlyTax = tax.monthly_tax;
-        const existing = await api.get(`/salary_records?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/salary_records?id=eq.${existing.data[0].id}`, { monthly_tax: monthlyTax });
-        } else {
-          await api.post('/salary_records', {
-            unique_hash: r.unique_hash,
-            period,
-            month_number: parseInt(period.split('-')[1]) || 1,
-            wage_subtotal: wageSubtotal,
-            monthly_tax: monthlyTax,
-          });
-        }
-        success++;
+        rows.push({ unique_hash: r.unique_hash, period, month_number: monthNumber, wage_subtotal: wageSubtotal, monthly_tax: monthlyTax });
       } catch { /* skip */ }
       setCalcProgress((p) => ({ ...p, done: p.done + 1 }));
     }
-    message.success(`劳务个税计算完成：${success} / ${records.length} 条`);
+    await bulkUpsert('salary_records', rows);
+    message.success(`劳务个税计算完成：${rows.length} / ${records.length} 条`);
     setCalcProgress({ done: 0, total: 0, active: false, label: '' });
     loadData();
   };

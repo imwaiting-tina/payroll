@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Button, Space, message, Upload, Input, Tag, Select, Progress } from 'antd';
 import { DownloadOutlined, UploadOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
+import { recalcAllTaxes } from '../../utils/taxRecalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
 import { useStore } from '../../stores/appStore';
@@ -108,6 +109,7 @@ const TaxSpecialDeductionsPage: React.FC = () => {
       if (data.length === 0) { message.info('未找到有效数据'); return; }
 
       let success = 0;
+      const rows: any[] = [];
       const failures: string[] = [];
       setImportProgress({ done: 0, total: data.length, importing: true });
       for (const row of data) {
@@ -122,18 +124,15 @@ const TaxSpecialDeductionsPage: React.FC = () => {
             continue;
           }
           const { employee_name, pay_company, ...dbRow } = row;
-          const existing = await api.get(`/tax_special_deductions?unique_hash=eq.${row.unique_hash}&period=eq.${period}`);
-          if (existing.data.length > 0) {
-            await api.patch(`/tax_special_deductions?id=eq.${existing.data[0].id}`, { ...dbRow, period });
-          } else {
-            await api.post('/tax_special_deductions', { ...dbRow, period });
-          }
+          rows.push({ ...dbRow, period });
           success++;
         } catch {
           failures.push(`${row.employee_name || '?'}：导入失败`);
         }
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
+      await bulkUpsert('tax_special_deductions', rows);
+      await recalcAllTaxes(period); // 导入完成后自动触发下游个税计算
       if (failures.length > 0) {
         message.warning(`导入完成：成功 ${success} 条，失败 ${failures.length} 条。${failures.slice(0, 8).join('；')}`);
       } else {

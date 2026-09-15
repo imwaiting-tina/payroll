@@ -3,7 +3,8 @@ import {
   Table, Button, Drawer, Form, Input, Select, Space, message, Card, InputNumber, Switch, Tag, Descriptions, DatePicker, Upload, Dropdown, Popconfirm, Progress,
 } from 'antd';
 import { PlusOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
+import { recalcAllTaxes } from '../../utils/taxRecalc';
 import type { SocialWelfareSet, HousingFundSet, EmployeeWelfareRecord } from '../../types';
 import { calcSocial, calcHousingFund } from '../../utils/welfareCalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
@@ -218,6 +219,7 @@ const EmployeeWelfare: React.FC = () => {
 
       setRecords(merged);
       setLocked(anyLocked(recRes.data));
+      return merged;
     } catch { message.error('加载数据失败'); }
     finally { setLoading(false); }
   };
@@ -336,11 +338,12 @@ const EmployeeWelfare: React.FC = () => {
   };
 
   // 一键自动计算：遍历所有记录，逐条计算并保存
-  const handleBatchCalc = async () => {
-    let success = 0;
+  const handleBatchCalc = async (list?: any[]) => {
+    const target = list ?? records;
+    const rows: any[] = [];
     let skipped = 0;
-    setCalcProgress({ done: 0, total: records.length, active: true, label: '正在一键计算社保' });
-    for (const rec of records) {
+    setCalcProgress({ done: 0, total: target.length, active: true, label: '正在一键计算社保' });
+    for (const rec of target) {
       try {
         const v = rec;
         if (!v.social_welfare_code || !v.housing_fund_code) {
@@ -407,17 +410,12 @@ const EmployeeWelfare: React.FC = () => {
           last_calc_time: new Date().toISOString(),
         };
 
-        const existing = await api.get(`/employee_welfare_records?unique_hash=eq.${v.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/employee_welfare_records?id=eq.${existing.data[0].id}`, payload);
-        } else {
-          await api.post('/employee_welfare_records', { ...payload, unique_hash: v.unique_hash, period });
-        }
-        success++;
+        rows.push({ unique_hash: v.unique_hash, period, ...payload });
       } catch { skipped++; }
       setCalcProgress((p) => ({ ...p, done: p.done + 1 }));
     }
-    message.success(`一键计算完成：${success} 条，跳过 ${skipped} 条（缺少福利套或基数）`);
+    await bulkUpsert('employee_welfare_records', rows);
+    message.success(`一键计算完成：${rows.length} 条，跳过 ${skipped} 条（缺少福利套或基数）`);
     setCalcProgress({ done: 0, total: 0, active: false, label: '' });
     loadData();
   };
@@ -514,8 +512,10 @@ const EmployeeWelfare: React.FC = () => {
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
       if (data.length === 0) { message.info('未找到有效数据'); return; }
 
-      let added = 0, updated = 0, failed = 0;
+      let failed = 0;
       const failReasons: string[] = [];
+      const rows: any[] = [];
+      const rowKeys: string[] = [];
       setImportProgress({ done: 0, total: data.length, importing: true });
 
       for (const row of data) {
@@ -525,28 +525,31 @@ const EmployeeWelfare: React.FC = () => {
             failReasons.push('缺唯一值（该行可能是新增员工，请先在花名册添加）');
             continue;
           }
-          const existing = await api.get(`/employee_welfare_records?unique_hash=eq.${row.unique_hash}&period=eq.${period}`);
           // 剔除展示字段（姓名/公司/部门不属于数据库表，仅供导出查看）
           const { employee_name, pay_company, department, ...dbRow } = row;
-          const payload = {
+          rows.push({
             ...dbRow,
             period,
             supp_enabled: String(row.supp_enabled).toLowerCase() === 'true' || row.supp_enabled === '是' || row.supp_enabled === 1,
-          };
-          if (existing.data.length > 0) {
-            await api.patch(`/employee_welfare_records?id=eq.${existing.data[0].id}`, payload);
-            updated++;
-          } else {
-            await api.post('/employee_welfare_records', payload);
-            added++;
-          }
+          });
+          rowKeys.push(row.unique_hash);
         } catch {
           failed++;
         }
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
+      let added = 0, updated = 0;
+      if (rows.length > 0) {
+        const existingRes = await api.get(`/employee_welfare_records?select=unique_hash&period=eq.${period}`);
+        const existingSet = new Set(existingRes.data.map((r: any) => r.unique_hash));
+        updated = rowKeys.filter((k) => existingSet.has(k)).length;
+        added = rowKeys.length - updated;
+        await bulkUpsert('employee_welfare_records', rows);
+      }
       message.info(`导入完成：新增 ${added}，更新 ${updated}，失败 ${failed}${failReasons.length ? '。' + failReasons.slice(0, 5).join('；') : ''}`);
-      loadData();
+      const fresh = await loadData();
+      if (fresh && fresh.length) await handleBatchCalc(fresh);
+      await recalcAllTaxes(period); // 社保计算完成后自动触发下游个税计算
     } catch (e: any) {
       message.error(e.message || '导入失败');
     } finally {
@@ -616,7 +619,7 @@ const EmployeeWelfare: React.FC = () => {
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space>
           <Button type="primary" icon={<PlusOutlined />} disabled={locked} onClick={openCreate}>添加记录</Button>
-          <Button type="primary" icon={<CalculatorOutlined />} disabled={locked} onClick={handleBatchCalc}>一键计算</Button>
+          <Button type="primary" icon={<CalculatorOutlined />} disabled={locked} onClick={() => handleBatchCalc()}>一键计算</Button>
           <Dropdown menu={{
             items: [
               { key: 'template', label: '导出空白模板' },

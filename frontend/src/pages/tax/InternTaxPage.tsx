@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Button, Space, message, Input, Tag, Select } from 'antd';
 import { CalculatorOutlined, LinkOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
 import { calcInternTax } from '../../utils/taxCalc';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
@@ -172,7 +172,7 @@ const InternTaxPage: React.FC = () => {
 
   // 执行当月计算
   const handleCalc = async () => {
-    let success = 0;
+    const rows: any[] = [];
     setCalcProgress({ done: 0, total: records.length, active: true, label: '正在计算实习生个税' });
     for (const r of records) {
       try {
@@ -195,35 +195,31 @@ const InternTaxPage: React.FC = () => {
           cumul_tax_paid: r._cumul_tax_paid,
           monthly_tax: result.monthly_tax,
         };
-        const existing = await api.get(`/tax_monthly_calcs?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/tax_monthly_calcs?id=eq.${existing.data[0].id}`, payload);
-        } else {
-          await api.post('/tax_monthly_calcs', payload);
-        }
-        success++;
+        rows.push(payload);
       } catch { /* skip */ }
       setCalcProgress((p) => ({ ...p, done: p.done + 1 }));
     }
-    message.success(`计算完成：${success} / ${records.length} 条`);
+    await bulkUpsert('tax_monthly_calcs', rows);
+    message.success(`计算完成：${rows.length} / ${records.length} 条`);
     setCalcProgress({ done: 0, total: 0, active: false, label: '' });
     loadData();
   };
 
   // 联动薪酬板块
   const handleSync = async () => {
-    let success = 0;
+    const syncRows: any[] = [];
     for (const r of records) {
-      try {
-        if (r.monthly_tax === undefined) continue;
-        const existing = await api.get(`/salary_records?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/salary_records?id=eq.${existing.data[0].id}`, { monthly_tax: r.monthly_tax });
-          success++;
-        }
-      } catch { /* skip */ }
+      if (r.monthly_tax === undefined) continue;
+      syncRows.push({ unique_hash: r.unique_hash, period, monthly_tax: r.monthly_tax });
     }
-    message.success(`已同步 ${success} 条到薪酬板块`);
+    if (syncRows.length === 0) { message.info('没有需要同步的数据'); return; }
+    const existingRes = await api.get(`/salary_records?select=unique_hash,month_number&period=eq.${period}`);
+    const existingMap = new Map(existingRes.data.map((x: any) => [x.unique_hash, x.month_number]));
+    const upsertRows = syncRows
+      .filter((r) => existingMap.has(r.unique_hash))
+      .map((r) => ({ unique_hash: r.unique_hash, period, month_number: existingMap.get(r.unique_hash), monthly_tax: r.monthly_tax }));
+    await bulkUpsert('salary_records', upsertRows);
+    message.success(`已同步 ${upsertRows.length} 条到薪酬板块`);
   };
 
   const columns: any[] = [

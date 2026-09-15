@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Space, Input, message, Button, Tag, Select } from 'antd';
 import { CalculatorOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
 import { isActiveInPeriod } from '../../utils/employee';
@@ -104,29 +104,20 @@ const FlexibleTaxPage: React.FC = () => {
 
   // 计算并保存灵工个税
   const handleCalc = async () => {
-    let success = 0;
+    const rows: any[] = [];
+    const monthNumber = parseInt(period.split('-')[1]) || 1;
     setCalcProgress({ done: 0, total: records.length, active: true, label: '正在计算灵工个税' });
     for (const r of records) {
       try {
         const basicSalary = Number(r.basic_salary || 0);
         const attendanceAdjustTotal = Number(r.attendance_adjust_total || 0);
         const monthlyTax = round2(Math.max(0, (basicSalary + attendanceAdjustTotal - 6250) * 0.024));
-        const existing = await api.get(`/salary_records?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/salary_records?id=eq.${existing.data[0].id}`, { monthly_tax: monthlyTax });
-        } else {
-          await api.post('/salary_records', {
-            unique_hash: r.unique_hash,
-            period,
-            month_number: parseInt(period.split('-')[1]) || 1,
-            monthly_tax: monthlyTax,
-          });
-        }
-        success++;
+        rows.push({ unique_hash: r.unique_hash, period, month_number: monthNumber, monthly_tax: monthlyTax });
       } catch { /* skip */ }
       setCalcProgress((p) => ({ ...p, done: p.done + 1 }));
     }
-    message.success(`灵工个税计算完成：${success} / ${records.length} 条`);
+    await bulkUpsert('salary_records', rows);
+    message.success(`灵工个税计算完成：${rows.length} / ${records.length} 条`);
     setCalcProgress({ done: 0, total: 0, active: false, label: '' });
     loadData();
   };

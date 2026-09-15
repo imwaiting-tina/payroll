@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, message, Input, Tag, Select, Modal, Input as AntInput, Drawer, Descriptions } from 'antd';
 import { DownloadOutlined, CheckCircleOutlined, RollbackOutlined, SendOutlined, SearchOutlined, SyncOutlined, FileExcelOutlined } from '@ant-design/icons';
-import api from '../api/client';
+import api, { bulkUpsert } from '../api/client';
 import { exportXlsx, type ExportDef } from '../utils/importExport';
 import { withSource } from '../components/SourceTag';
 import { useHorizontalScroll } from '../utils/useHorizontalScroll';
@@ -329,8 +329,8 @@ const PayrollPage: React.FC = () => {
       const { empMap, merged } = await fetchAndCompute();
       setEmployees(empMap);
 
-      let success = 0;
       let skippedLocked = 0;
+      const rows: any[] = [];
       setCalcProgress({ done: 0, total: merged.length, active: true, label: '正在刷新同步薪资' });
       for (const r of merged) {
         try {
@@ -339,7 +339,7 @@ const PayrollPage: React.FC = () => {
             skippedLocked++;
             continue;
           }
-          const payload = {
+          rows.push({
             unique_hash: r.unique_hash,
             period,
             month_number: parseInt(period.split('-')[1]) || 1,
@@ -356,17 +356,12 @@ const PayrollPage: React.FC = () => {
             net_pay: r.net_pay,
             total_cost: r.total_cost,
             data_status: '已计算',
-          };
-          const existing = await api.get(`/salary_records?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-          if (existing.data.length > 0) {
-            await api.patch(`/salary_records?id=eq.${existing.data[0].id}`, payload);
-          } else {
-            await api.post('/salary_records', payload);
-          }
-          success++;
+          });
         } catch { /* skip */ }
         setCalcProgress((p) => ({ ...p, done: p.done + 1 }));
       }
+      await bulkUpsert('salary_records', rows);
+      const success = rows.length;
 
       setRecords(applyFilters(merged));
       setCalcProgress({ done: 0, total: 0, active: false, label: '' });
@@ -425,10 +420,10 @@ const PayrollPage: React.FC = () => {
 
   // 保存计算结果（落库 salary_records）
   const handleSaveResult = async () => {
-    let success = 0;
+    const rows: any[] = [];
     for (const r of records) {
       try {
-        const payload = {
+        rows.push({
           unique_hash: r.unique_hash,
           period,
           month_number: parseInt(period.split('-')[1]) || 1,
@@ -445,17 +440,11 @@ const PayrollPage: React.FC = () => {
           net_pay: r.net_pay,
           total_cost: r.total_cost,
           data_status: '已计算',
-        };
-        const existing = await api.get(`/salary_records?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/salary_records?id=eq.${existing.data[0].id}`, payload);
-        } else {
-          await api.post('/salary_records', payload);
-        }
-        success++;
+        });
       } catch { /* skip */ }
     }
-    message.success(`已保存 ${success} / ${records.length} 条计算结果到数据库`);
+    await bulkUpsert('salary_records', rows);
+    message.success(`已保存 ${rows.length} / ${records.length} 条计算结果到数据库`);
   };
 
   // 审批流（薪资模块，遵循新权限体系）

@@ -4,7 +4,7 @@ import {
   Tabs, Tag, Switch, DatePicker, Upload, Dropdown, Popconfirm, Progress,
 } from 'antd';
 import { PlusOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
-import api from '../../api/client';
+import api, { bulkUpsert } from '../../api/client';
 import type { SocialWelfareSet, HousingFundSet } from '../../types';
 import { calcSocial, calcHousingFund } from '../../utils/welfareCalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
@@ -182,8 +182,10 @@ const WelfareSetPage: React.FC = () => {
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
       if (data.length === 0) { message.info('未找到有效数据'); return; }
 
-      let added = 0, updated = 0, failed = 0;
+      let failed = 0;
       const failReasons: string[] = [];
+      const rows: any[] = [];
+      const rowCodes: string[] = [];
       setImportProgress({ done: 0, total: data.length, importing: true });
 
       for (const row of data) {
@@ -194,7 +196,6 @@ const WelfareSetPage: React.FC = () => {
             failReasons.push(`${row.code} 为系统内置福利套，不允许导入修改`);
             continue;
           }
-          const existing = await api.get(`/${table}?code=eq.${row.code}`);
           // 布尔字段转换
           const boolFields = ['pension_enabled', 'medical_enabled', 'unemployment_enabled', 'injury_enabled', 'maternity_enabled', 'supp_enabled', 'allow_special_base', 'allow_stop_supp', 'allow_override_round'];
           const payload: any = { ...row };
@@ -204,17 +205,20 @@ const WelfareSetPage: React.FC = () => {
               payload[f] = v === 'true' || v === '是' || v === '1' || v === '启用' || v === 'yes';
             }
           }
-          if (existing.data.length > 0) {
-            await api.patch(`/${table}?id=eq.${existing.data[0].id}`, payload);
-            updated++;
-          } else {
-            await api.post(`/${table}`, payload);
-            added++;
-          }
+          rows.push(payload);
+          rowCodes.push(row.code);
         } catch {
           failed++;
         }
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
+      }
+      let added = 0, updated = 0;
+      if (rows.length > 0) {
+        const existingRes = await api.get(`/${table}?select=code`);
+        const existingSet = new Set(existingRes.data.map((r: any) => r.code));
+        updated = rowCodes.filter((c) => existingSet.has(c)).length;
+        added = rowCodes.length - updated;
+        await bulkUpsert(table, rows, 'code');
       }
       message.info(`导入完成：新增 ${added}，更新 ${updated}，失败 ${failed}${failReasons.length ? '。' + failReasons.slice(0, 5).join('；') : ''}`);
       loadData();

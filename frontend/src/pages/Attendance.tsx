@@ -4,7 +4,8 @@ import {
 } from 'antd';
 import { SaveOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, PlusOutlined, SettingOutlined, SendOutlined, FileExcelOutlined, UnlockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/client';
+import api, { bulkUpsert } from '../api/client';
+import { recalcAllTaxes } from '../utils/taxRecalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../utils/importExport';
 import { calcAttendance, parseAttendanceRules, type AttendanceRules, DEFAULT_ATTENDANCE_RULES } from '../utils/attendanceCalc';
 import { isActiveInPeriod } from '../utils/employee';
@@ -275,13 +276,15 @@ const AttendancePage: React.FC = () => {
       return;
     }
 
-    let success = 0;
+    const rows: any[] = [];
     setCalcProgress({ done: 0, total: records.length, active: true, label: '正在自动计算考勤' });
     for (const r of records) {
       if (r.data_status === '已锁定') continue;  // 已锁定跳过
       try {
         const result = calcRecord(r);
-        const calcFields = {
+        rows.push({
+          unique_hash: r.unique_hash,
+          period,
           sick_pay_rate: result.sick_pay_rate,
           sick_amount: result.sick_amount,
           personal_amount: result.personal_amount,
@@ -290,20 +293,12 @@ const AttendancePage: React.FC = () => {
           on_off_adjust: result.on_off_adjust,
           attendance_adjust_total: result.attendance_adjust_total,
           data_status: '已计算',
-        };
-        const existing = await api.get(`/attendance_records?unique_hash=eq.${r.unique_hash}&period=eq.${period}`);
-        if (existing.data.length > 0) {
-          await api.patch(`/attendance_records?id=eq.${existing.data[0].id}`, calcFields);
-        } else {
-          await api.post('/attendance_records', {
-            unique_hash: r.unique_hash, period, ...calcFields,
-          });
-        }
-        success++;
+        });
       } catch { /* skip */ }
       setCalcProgress((p) => ({ ...p, done: p.done + 1 }));
     }
-    message.success(`计算完成：${success} / ${records.length} 条`);
+    await bulkUpsert('attendance_records', rows);
+    message.success(`计算完成：${rows.length} / ${records.length} 条`);
     setCalcProgress({ done: 0, total: 0, active: false, label: '' });
     loadData();
   };
@@ -499,6 +494,7 @@ const AttendancePage: React.FC = () => {
       // 天数字段：Excel 留空一律按 0 处理，确保能把旧值清掉
       const dayFields = ['sick_days', 'personal_days', 'annual_leave', 'compensatory_leave', 'absenteeism_days', 'funeral_leave', 'parental_leave', 'marriage_leave', 'maternity_leave', 'regular_overtime_days', 'weekend_overtime_days', 'holiday_overtime_days', 'guard_overtime_days', 'overtime_hours', 'actual_attendance_days'];
       let success = 0;
+      const rows: any[] = [];
       const failures: string[] = [];
       setImportProgress({ done: 0, total: data.length, importing: true });
 
@@ -637,12 +633,7 @@ const AttendancePage: React.FC = () => {
             data_source: '导入',
           };
 
-          const existing = await api.get(`/attendance_records?unique_hash=eq.${row.unique_hash}&period=eq.${period}`);
-          if (existing.data.length > 0) {
-            await api.patch(`/attendance_records?id=eq.${existing.data[0].id}`, payload);
-          } else {
-            await api.post('/attendance_records', payload);
-          }
+          rows.push(payload);
           success++;
         } catch (e: any) {
           // 把具体错误带出来，方便定位（如数据库缺字段、RLS 拒绝等）
@@ -653,6 +644,8 @@ const AttendancePage: React.FC = () => {
         // 更新导入进度
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
+      await bulkUpsert('attendance_records', rows);
+      await recalcAllTaxes(period); // 导入完成后自动触发下游个税计算
       if (failures.length > 0) {
         message.warning(`导入完成：成功 ${success} 条，失败 ${failures.length} 条。${failures.slice(0, 8).join('；')}`);
       } else {
@@ -672,11 +665,9 @@ const AttendancePage: React.FC = () => {
   // ====== 提交审批（人事专员）：当月考勤 data_status 置为 已提交审批 ======
   const doSubmitApproval = async () => {
     try {
-      const res = await api.get(`/attendance_records?select=id&period=eq.${period}`);
-      const ids = res.data.map((r: any) => r.id);
-      if (ids.length === 0) { message.warning('该月暂无考勤数据'); return; }
-      const updated = ids.map((id: number) => api.patch(`/attendance_records?id=eq.${id}`, { data_status: '已提交审批' }));
-      await Promise.all(updated);
+      const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
+      if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
+      await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '已提交审批' });
       message.success('考勤已提交审批');
       loadData();
     } catch (e: any) {
@@ -688,11 +679,9 @@ const AttendancePage: React.FC = () => {
   // ====== 审批通过（考勤审批人）：当月考勤置为 已锁定（冻结） ======
   const doApprove = async () => {
     try {
-      const res = await api.get(`/attendance_records?select=id&period=eq.${period}`);
-      const ids = res.data.map((r: any) => r.id);
-      if (ids.length === 0) { message.warning('该月暂无考勤数据'); return; }
-      const updated = ids.map((id: number) => api.patch(`/attendance_records?id=eq.${id}`, { data_status: '已锁定' }));
-      await Promise.all(updated);
+      const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
+      if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
+      await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '已锁定' });
       message.success('考勤审批通过，当月考勤已冻结');
       loadData();
     } catch (e: any) {
@@ -706,11 +695,9 @@ const AttendancePage: React.FC = () => {
     if (payrollLockedForPeriod) { message.warning('当月薪资已审批通过并冻结，考勤不能再解锁'); return; }
     setUnlocking(true);
     try {
-      const res = await api.get(`/attendance_records?select=id&period=eq.${period}`);
-      const ids = res.data.map((r: any) => r.id);
-      if (ids.length === 0) { message.warning('该月暂无考勤数据'); return; }
-      const updated = ids.map((id: number) => api.patch(`/attendance_records?id=eq.${id}`, { data_status: '正常' }));
-      await Promise.all(updated);
+      const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
+      if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
+      await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '正常' });
       message.success('考勤已解锁，需重新提交审批');
       setUnlockModal(false);
       loadData();
@@ -724,10 +711,9 @@ const AttendancePage: React.FC = () => {
   // ====== 退回修改（考勤审批人）：恢复为 已计算 ======
   const doReject = async () => {
     try {
-      const res = await api.get(`/attendance_records?select=id&period=eq.${period}`);
-      const ids = res.data.map((r: any) => r.id);
-      const updated = ids.map((id: number) => api.patch(`/attendance_records?id=eq.${id}`, { data_status: '已计算' }));
-      await Promise.all(updated);
+      const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
+      if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
+      await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '已计算' });
       message.success('已退回修改');
       loadData();
     } catch (e: any) {

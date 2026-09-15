@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Button, Space, Input, Select, message, Upload, Typography, Progress } from 'antd';
 import { DownloadOutlined, UploadOutlined, SearchOutlined } from '@ant-design/icons';
-import api from '../api/client';
+import api, { bulkUpsert } from '../api/client';
+import { recalcAllTaxes } from '../utils/taxRecalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../utils/importExport';
 import { withSource } from '../components/SourceTag';
 import { useHorizontalScroll } from '../utils/useHorizontalScroll';
@@ -165,6 +166,7 @@ const AdditionalSalaryPage: React.FC = () => {
       if (data.length === 0) { message.info('未找到有效数据'); return; }
 
       let success = 0;
+      const rows: any[] = [];
       const failures: string[] = [];
       setImportProgress({ done: 0, total: data.length, importing: true });
       for (const row of data) {
@@ -174,12 +176,7 @@ const AdditionalSalaryPage: React.FC = () => {
             continue;
           }
           const { employee_name, pay_company, cost_center, department, report_to, position, entry_date, attendance_type, ...dbRow } = row;
-          const existing = await api.get(`/additional_salary_records?unique_hash=eq.${row.unique_hash}&period=eq.${period}`);
-          if (existing.data.length > 0) {
-            await api.patch(`/additional_salary_records?id=eq.${existing.data[0].id}`, { ...dbRow, period });
-          } else {
-            await api.post('/additional_salary_records', { ...dbRow, period });
-          }
+          rows.push({ ...dbRow, period });
           success++;
         } catch {
           failures.push(`${row.employee_name || '?'}：导入失败`);
@@ -187,6 +184,8 @@ const AdditionalSalaryPage: React.FC = () => {
         // 更新导入进度
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
+      await bulkUpsert('additional_salary_records', rows);
+      await recalcAllTaxes(period); // 导入完成后自动触发下游个税计算
       if (failures.length > 0) {
         message.warning(`导入完成：成功 ${success} 条，失败 ${failures.length} 条。${failures.slice(0, 8).join('；')}`);
       } else {
