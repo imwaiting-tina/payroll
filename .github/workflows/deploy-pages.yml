@@ -1,10 +1,8 @@
 name: Deploy to GitHub Pages
 
-# 发布地址：https://<user>.github.io/<repo>/
-# 触发：推送 gitee-pages 分支（与上游 HRO-Jay/PMS 保持一致），也可手动运行
+# 已停用自动部署（2026-09-15）：正式站已迁到 Cloudflare Pages（staff.hro.net.cn），
+# 本工作流不再随 push 自动运行，仅保留手动触发（workflow_dispatch）备用。
 on:
-  push:
-    branches: [gitee-pages, main]
   workflow_dispatch:
 
 jobs:
