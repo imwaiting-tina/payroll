@@ -21,7 +21,7 @@ const SECONDARY = '#2F6A9E'; // 辅色：次要系列、加班柱
 const LIGHT = '#7BA5C6';     // 浅调：加班时长、已通过项
 const ACCENT = '#C0703A';    // 强调色：合计虚线、峰值标注
 const NEGATIVE = '#A6452F';  // 负向指标：迟到、缺卡未补卡
-const GRAY = '#8A94A0';      // 中性灰：参考线、非重点系列
+const GRAY = '#78828E';      // 中性灰：参考线、非重点系列
 
 // 兼容旧槽位，映射到用户配色
 const GREEN = LIGHT;    // 已通过项 → 浅调
@@ -113,8 +113,8 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: { type: 'value', ...axStyle },
     series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: GRAY }, itemStyle: { color: GRAY },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(138,148,160,0.22)' }, { offset: 1, color: 'rgba(138,148,160,0)' }] } },
-      label: { show: true, color: '#A9B3BE', fontSize: 11 } }],
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(120,130,142,0.22)' }, { offset: 1, color: 'rgba(120,130,142,0)' }] } },
+      label: { show: true, color: '#98A2AE', fontSize: 11 } }],
   };
   const optMiss = {
     tooltip: baseTip, grid: { left: 8, right: 24, top: 40, bottom: 8, containLabel: true },
@@ -138,7 +138,7 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: [{ type: 'value', name: '%', min: 90, max: 100, ...axStyle }, { type: 'value', name: '小时', ...axStyle, splitLine: { show: false } }],
     series: [
-      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: GRAY }, itemStyle: { color: GRAY }, label: { show: true, formatter: '{c}%', color: '#A9B3BE', fontSize: 11 } },
+      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: GRAY }, itemStyle: { color: GRAY }, label: { show: true, formatter: '{c}%', color: '#98A2AE', fontSize: 11 } },
       { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: SECONDARY, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
     ],
   };
