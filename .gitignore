@@ -45,5 +45,8 @@ htmlcov/
 supabase/.branches/
 supabase/.temp/
 
+# Cloudflare（wrangler 本地缓存）
+.wrangler/
+
 # Vite 临时缓存
 vite.config.ts.timestamp-*.mjs
