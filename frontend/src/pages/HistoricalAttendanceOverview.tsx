@@ -15,15 +15,15 @@ const D: any = ATTENDANCE_HISTORY;
 const INK = '#1f2937';
 const INK_SUB = '#6b7280';
 const BORDER = '#e6e9ef';
-const GREEN = '#5AD8A6';
-const RED = '#E8684A';
-const GOLD = '#F6BD16';
-const PALETTE = ['#5B8FF9', '#6DC8EC', '#5AD8A6', '#F6BD16', '#E8684A', '#FF99C3', '#9270CA', '#FF9845', '#1E9493', '#8C8C8C'];
+const GREEN = '#9CAF88';
+const RED = '#C4877A';
+const GOLD = '#C7B889';
+const PALETTE = ['#8CA6C0', '#7FA8A5', '#9CAF88', '#C7B889', '#C4877A', '#C9A6A3', '#A79BBC', '#B59E87', '#A9A9A9', '#8FA8BF'];
 
 const LEAVES = ['年假', '调休', '事假', '病假', '婚假', '丧假', '产假', '陪产假', '育儿假'];
 const LCOLOR: Record<string, string> = {
-  年假: '#5B8FF9', 调休: '#5AD8A6', 事假: '#F6BD16', 病假: '#E8684A', 婚假: '#FF99C3',
-  丧假: '#8C8C8C', 产假: '#9270CA', 陪产假: '#6DC8EC', 育儿假: '#1E9493',
+  年假: '#8FA8BF', 调休: '#A3B18A', 事假: '#C9B98E', 病假: '#C58B6F', 婚假: '#C9A6A3',
+  丧假: '#A9A9A9', 产假: '#A79BBC', 陪产假: '#7FA8A5', 育儿假: '#B59E87',
 };
 
 const cardStyle: React.CSSProperties = {
@@ -104,7 +104,7 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: { type: 'value', ...axStyle },
     series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: PALETTE[0] }, itemStyle: { color: PALETTE[0] },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(91,143,249,0.22)' }, { offset: 1, color: 'rgba(91,143,249,0)' }] } },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(140,166,192,0.22)' }, { offset: 1, color: 'rgba(140,166,192,0)' }] } },
       label: { show: true, color: PALETTE[0], fontSize: 11 } }],
   };
   const optMiss = {
