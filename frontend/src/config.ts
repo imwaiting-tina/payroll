@@ -11,12 +11,14 @@
 const PROXY_URL = (import.meta.env.VITE_API_PROXY ?? '').replace(/\/+$/, '');
 
 const SUPABASE_URL = 'https://avuldnywmiflbmmlgmas.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2dWxkbnl3bWlmbGJtbWxnbWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMzY0NDgsImV4cCI6MjEwMTkxMjQ0OH0.8qqzH3zMc274Di-TK_6huMhrOWppJI1L3tjIfcBV2ts';
+// 新版 Publishable key（替代旧版 anon JWT，作为 apikey 头下发）
+const SUPABASE_ANON_KEY = 'sb_publishable_CZvxeQitH63TK4C2TUI1qw_GsxLEQ4G';
 
 export const PROXY_BASE_URL = PROXY_URL;
 export const API_BASE_URL    = `${PROXY_URL}/rest/v1`;
 export const AUTH_URL        = `${PROXY_URL}/auth/v1`;
 export const STORAGE_URL     = `${PROXY_URL}/storage/v1`;
+export const FUNCTIONS_URL   = `${PROXY_URL}/functions/v1`;
 
 export const SCF_CONFIG = {
   supabaseUrl:      SUPABASE_URL,

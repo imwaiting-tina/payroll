@@ -12,8 +12,8 @@
 
 const SUPABASE_URL = 'https://avuldnywmiflbmmlgmas.supabase.co';
 
-// 只代理这三类路径，其它一律走静态资源
-const API_PATH = /^\/(rest|auth|storage)\//;
+// 只代理这四类路径，其它一律走静态资源（functions = 账号管理 Edge Function）
+const API_PATH = /^\/(rest|auth|storage|functions)\//;
 
 // 不需要转发的请求头（Cloudflare / 浏览器上下文相关）
 const STRIP_HEADERS = ['origin', 'referer', 'cf-connecting-ip', 'cf-ray', 'cf-ipcountry', 'cf-worker'];

@@ -2,9 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Space, message, Tag, Popconfirm, Card } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ROLE_LABELS, ROLE_COLORS, ROLE_OPTIONS, type Role } from '../../utils/permissions';
-import { AUTH_URL } from '../../config';
+import { FUNCTIONS_URL } from '../../config';
 
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2dWxkbnl3bWlmbGJtbWxnbWFzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjMzNjQ0OCwiZXhwIjoyMTAxOTEyNDQ4fQ.S7e1lJxysz9v0MoXaizgMy-wbSMHxmZUBFTj_tVABnQ';
+// 账号管理改走 Edge Function（supabase/functions/admin-users）：
+// secret 密钥只存在于服务端，前端不再接触 service_role key。
+const ADMIN_URL = `${FUNCTIONS_URL}/admin-users`;
+
+const token = () => localStorage.getItem('supabase_token') || '';
+
+async function adminFetch(method: 'GET' | 'POST' | 'PATCH', body?: any) {
+  return fetch(ADMIN_URL, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token()}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
 
 const AccountManagementPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -17,22 +32,17 @@ const AccountManagementPage: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // 通过 Supabase Auth 的管理 API 列出用户
-      const res = await fetch(`${AUTH_URL}/admin/users?per_page=100`, {
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        },
-      });
+      const res = await adminFetch('GET');
       const data = await res.json();
-      const list = Array.isArray(data) ? data : (data.users || []);
+      if (!res.ok) throw new Error(data.error || '加载失败');
+      const list = data.users || [];
       setUsers(list.map((u: any) => ({
         ...u,
         key: u.id,
         role: (u.user_metadata?.role in ROLE_LABELS ? u.user_metadata?.role : 'hr_staff'),
       })));
-    } catch {
-      message.error('加载账号列表失败');
+    } catch (e: any) {
+      message.error(e.message || '加载账号列表失败');
     } finally {
       setLoading(false);
     }
@@ -48,27 +58,14 @@ const AccountManagementPage: React.FC = () => {
   const handleCreate = async () => {
     const values = await form.validateFields();
     try {
-      const res = await fetch(`${AUTH_URL}/admin/users`, {
-        method: 'POST',
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: values.email,
-          password: values.password,
-          email_confirm: true,
-          user_metadata: { role: values.role },
-        }),
-      });
+      const res = await adminFetch('POST', { email: values.email, password: values.password, role: values.role });
       if (res.ok) {
         message.success('账号创建成功');
         setModalOpen(false);
         loadUsers();
       } else {
         const err = await res.json();
-        message.error(err.msg || err.message || '创建失败');
+        message.error(err.error || err.message || '创建失败');
       }
     } catch (e: any) {
       message.error(e.message || '创建失败');
@@ -81,15 +78,7 @@ const AccountManagementPage: React.FC = () => {
     try {
       // 如果要把某个人设为 admin，且当前有另一个 admin，则当前 admin 降为 hr_staff
       if (role === 'admin' && currentUserId && currentUserId !== userId) {
-        await fetch(`${AUTH_URL}/admin/users/${currentUserId}`, {
-          method: 'PUT',
-          headers: {
-            apikey: SERVICE_ROLE_KEY,
-            Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ user_metadata: { role: 'hr_staff' } }),
-        });
+        await adminFetch('PATCH', { id: currentUserId, role: 'hr_staff' });
       }
       // 如果要降级当前的唯一 admin 且没有别人是 admin，则阻止
       const adminCount = users.filter(u => u.role === 'admin').length;
@@ -98,23 +87,16 @@ const AccountManagementPage: React.FC = () => {
         return;
       }
 
-      const res = await fetch(`${AUTH_URL}/admin/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ user_metadata: { role } }),
-      });
+      const res = await adminFetch('PATCH', { id: userId, role });
       if (res.ok) {
         message.success(role === 'admin' && currentUserId === userId ? '管理员权限已转移，您已降为操作' : '角色已更新');
         loadUsers();
       } else {
-        message.error('更新失败');
+        const err = await res.json();
+        message.error(err.error || '更新失败');
       }
-    } catch {
-      message.error('更新失败');
+    } catch (e: any) {
+      message.error(e.message || '更新失败');
     }
   };
 
@@ -126,45 +108,31 @@ const AccountManagementPage: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch(`${AUTH_URL}/admin/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password: newPwd }),
-      });
+      const res = await adminFetch('PATCH', { id: userId, password: newPwd });
       if (res.ok) {
         message.success('密码已重置');
       } else {
-        message.error('重置失败');
+        const err = await res.json();
+        message.error(err.error || '重置失败');
       }
-    } catch {
-      message.error('重置失败');
+    } catch (e: any) {
+      message.error(e.message || '重置失败');
     }
   };
 
   // 停用/启用账号
   const handleToggleBan = async (user: any) => {
     try {
-      const res = await fetch(`${AUTH_URL}/admin/users/${user.id}`, {
-        method: 'PUT',
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ban_duration: user.banned_until ? 'none' : '876000h' }),
-      });
+      const res = await adminFetch('PATCH', { id: user.id, ban_duration: user.banned_until ? 'none' : '876000h' });
       if (res.ok) {
         message.success(user.banned_until ? '已启用' : '已停用');
         loadUsers();
       } else {
-        message.error('操作失败');
+        const err = await res.json();
+        message.error(err.error || '操作失败');
       }
-    } catch {
-      message.error('操作失败');
+    } catch (e: any) {
+      message.error(e.message || '操作失败');
     }
   };
 
