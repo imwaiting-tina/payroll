@@ -15,15 +15,24 @@ const D: any = ATTENDANCE_HISTORY;
 const INK = '#1f2937';
 const INK_SUB = '#6b7280';
 const BORDER = '#e6e9ef';
-const GREEN = '#9CAF88';
-const RED = '#C4877A';
-const GOLD = '#C7B889';
-const PALETTE = ['#8CA6C0', '#7FA8A5', '#9CAF88', '#C7B889', '#C4877A', '#C9A6A3', '#A79BBC', '#B59E87', '#A9A9A9', '#8FA8BF'];
+// 用户指定配色：蓝系主色 + 橙色强调 + 红色负向 + 中性灰
+const PRIMARY = '#1B3A5C';   // 主色：迟到折线、出勤率线
+const SECONDARY = '#2F6A9E'; // 辅色：次要系列、加班柱
+const LIGHT = '#7BA5C6';     // 浅调：加班时长、已通过项
+const ACCENT = '#C0703A';    // 强调色：合计虚线、峰值标注
+const NEGATIVE = '#A6452F';  // 负向指标：迟到、缺卡未补卡
+const GRAY = '#8A94A0';      // 中性灰：参考线、非重点系列
+
+// 兼容旧槽位，映射到用户配色
+const GREEN = LIGHT;    // 已通过项 → 浅调
+const RED = NEGATIVE;   // 未补卡/负向 → 负向
+const GOLD = ACCENT;    // 合计虚线 → 强调色
+const PALETTE = [PRIMARY, PRIMARY, SECONDARY, LIGHT, ACCENT, NEGATIVE, GRAY, '#8E7A9E', '#5B8E8E', '#7A9B6E'];
 
 const LEAVES = ['年假', '调休', '事假', '病假', '婚假', '丧假', '产假', '陪产假', '育儿假'];
 const LCOLOR: Record<string, string> = {
-  年假: '#8FA8BF', 调休: '#A3B18A', 事假: '#C9B98E', 病假: '#C58B6F', 婚假: '#C9A6A3',
-  丧假: '#A9A9A9', 产假: '#A79BBC', 陪产假: '#7FA8A5', 育儿假: '#B59E87',
+  年假: PRIMARY, 调休: SECONDARY, 事假: LIGHT, 病假: NEGATIVE, 婚假: ACCENT,
+  丧假: GRAY, 产假: '#8E7A9E', 陪产假: '#5B8E8E', 育儿假: '#7A9B6E',
 };
 
 const cardStyle: React.CSSProperties = {
@@ -104,7 +113,7 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: { type: 'value', ...axStyle },
     series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: PALETTE[0] }, itemStyle: { color: PALETTE[0] },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(140,166,192,0.22)' }, { offset: 1, color: 'rgba(140,166,192,0)' }] } },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(27,58,92,0.22)' }, { offset: 1, color: 'rgba(27,58,92,0)' }] } },
       label: { show: true, color: PALETTE[0], fontSize: 11 } }],
   };
   const optMiss = {
@@ -130,7 +139,7 @@ const Tab1Trend: React.FC = () => {
     yAxis: [{ type: 'value', name: '%', min: 90, max: 100, ...axStyle }, { type: 'value', name: '小时', ...axStyle, splitLine: { show: false } }],
     series: [
       { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: PALETTE[1] }, itemStyle: { color: PALETTE[1] }, label: { show: true, formatter: '{c}%', color: PALETTE[1], fontSize: 11 } },
-      { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: GOLD, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
+      { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: SECONDARY, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
     ],
   };
 
@@ -292,7 +301,7 @@ const Tab3MissOverview: React.FC = () => {
       { name: '已补卡', type: 'bar', stack: 'x', data: MO.months.map((m: any) => m.fixed), itemStyle: { color: GREEN, borderRadius: [4, 4, 0, 0] }, barWidth: 28 },
       { name: '未补卡', type: 'bar', stack: 'x', data: MO.months.map((m: any) => m.unfixed), itemStyle: { color: RED } },
       { name: '缺卡总数', type: 'line', data: MO.months.map((m: any) => m.total), itemStyle: { color: GOLD }, lineStyle: { width: 2.5, color: GOLD }, label: { show: true, color: GOLD, fontSize: 11 } },
-      { name: '涉及人数', type: 'line', yAxisIndex: 1, data: MO.months.map((m: any) => m.ppl), itemStyle: { color: PALETTE[1] }, lineStyle: { width: 2, type: 'dashed', color: PALETTE[1] } },
+      { name: '涉及人数', type: 'line', yAxisIndex: 1, data: MO.months.map((m: any) => m.ppl), itemStyle: { color: GRAY }, lineStyle: { width: 2, type: 'dashed', color: GRAY } },
     ],
   };
   const optMissCat = {
@@ -404,7 +413,7 @@ const Tab5Offsys: React.FC = () => {
   const optOffType = {
     tooltip: { trigger: 'item' as const, backgroundColor: 'rgba(23,32,46,0.92)', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 }, formatter: '{b}<br>{c} 条（{d}%）' },
     series: [{ type: 'pie', radius: ['40%', '66%'], center: ['50%', '50%'],
-      data: Object.entries(OC).map(([k, v], i) => ({ name: k, value: v, itemStyle: { color: [PALETTE[0], GREEN, PALETTE[1], GOLD, RED][i % 5] } })),
+      data: Object.entries(OC).map(([k, v], i) => ({ name: k, value: v, itemStyle: { color: [PRIMARY, LIGHT, SECONDARY, ACCENT, NEGATIVE][i % 5] } })),
       label: { color: INK_SUB, fontSize: 11 }, itemStyle: { borderColor: '#fff', borderWidth: 2 } }],
   };
 
