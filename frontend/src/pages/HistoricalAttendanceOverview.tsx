@@ -58,8 +58,9 @@ const axStyle = {
 };
 
 const sum = (a: any[]) => a.reduce((x: number, y: any) => x + (Number(y) || 0), 0);
-const fmtNum = (v: any) => (v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('zh-CN'));
-const fmtPct = (v: any) => (v === null || v === undefined ? '—' : `${(Number(v) * 100).toFixed(1)}%`);
+const fmtNum = (v: any) => (v === null || v === undefined || v === '' || Number(v) === 0 ? '—' : Number(v).toLocaleString('zh-CN'));
+const fmtPct = (v: any) => (v === null || v === undefined || Number(v) === 0 ? '—' : `${(Number(v) * 100).toFixed(1)}%`);
+const labelOrDash = (p: any) => (Number(p.value) === 0 ? '—' : p.value);
 
 /** ECharts 容器：挂载即渲染，容器尺寸变化时自动 resize（处理 Tab 懒渲染/窗口缩放） */
 const ChartBox: React.FC<{ option: any; height?: number }> = ({ option, height = 300 }) => {
@@ -77,14 +78,17 @@ const ChartBox: React.FC<{ option: any; height?: number }> = ({ option, height =
 };
 
 /** 指标卡（商务化） */
-const Kpi: React.FC<{ value: React.ReactNode; unit?: string; label: string; color?: string }> = ({ value, unit, label, color }) => (
-  <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', border: `1px solid ${BORDER}`, boxShadow: '0 1px 2px rgba(16,24,40,0.04)', height: '100%' }}>
-    <div style={{ fontSize: 20, fontWeight: 700, color: color || INK, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-      {value}{unit && <span style={{ fontSize: 12, color: '#9aa4b2', fontWeight: 400, marginLeft: 3 }}>{unit}</span>}
+const Kpi: React.FC<{ value: React.ReactNode; unit?: string; label: string; color?: string }> = ({ value, unit, label, color }) => {
+  const v = (value === null || value === undefined || value === '' || value === 0) ? '—' : value;
+  return (
+    <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', border: `1px solid ${BORDER}`, boxShadow: '0 1px 2px rgba(16,24,40,0.04)', height: '100%' }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: (v === '—' ? INK : (color || INK)), lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {v}{unit && v !== '—' && <span style={{ fontSize: 12, color: '#9aa4b2', fontWeight: 400, marginLeft: 3 }}>{unit}</span>}
+      </div>
+      <div style={{ fontSize: 12, color: INK_SUB, marginTop: 2 }}>{label}</div>
     </div>
-    <div style={{ fontSize: 12, color: INK_SUB, marginTop: 2 }}>{label}</div>
-  </div>
-);
+  );
+};
 
 const KpiRow: React.FC<{ items: { value: React.ReactNode; unit?: string; label: string; color?: string }[] }> = ({ items }) => (
   <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -117,7 +121,7 @@ const Tab1Trend: React.FC = () => {
     yAxis: { type: 'value', ...axStyle },
     series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: ACCENT }, itemStyle: { color: ACCENT },
       areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(192,138,90,0.25)' }, { offset: 1, color: 'rgba(192,138,90,0)' }] } },
-      label: { show: true, color: ACCENT, fontSize: 11 } }],
+      label: { show: true, color: ACCENT, fontSize: 11, formatter: labelOrDash } }],
   };
   const optMiss = {
     tooltip: baseTip, grid: { left: 8, right: 24, top: 40, bottom: 8, containLabel: true },
@@ -126,7 +130,7 @@ const Tab1Trend: React.FC = () => {
     series: [
       { name: '缺卡未补卡', type: 'bar', stack: 'm', data: T.miss, itemStyle: { color: RED, borderRadius: [4, 4, 0, 0] }, barWidth: 26 },
       { name: '补卡已通过', type: 'bar', stack: 'm', data: T.fix, itemStyle: { color: GREEN } },
-      { name: '缺卡合计', type: 'line', data: T.missTotal, symbolSize: 7, lineStyle: { width: 2.5, color: GOLD, type: 'dashed' }, itemStyle: { color: GOLD }, label: { show: true, color: GOLD, fontSize: 11 } },
+      { name: '缺卡合计', type: 'line', data: T.missTotal, symbolSize: 7, lineStyle: { width: 2.5, color: GOLD, type: 'dashed' }, itemStyle: { color: GOLD }, label: { show: true, color: GOLD, fontSize: 11, formatter: labelOrDash } },
     ],
   };
   const optLeave = {
@@ -141,7 +145,7 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: [{ type: 'value', name: '%', min: 90, max: 100, ...axStyle }, { type: 'value', name: '小时', ...axStyle, splitLine: { show: false } }],
     series: [
-      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: BLUE }, itemStyle: { color: BLUE }, label: { show: true, formatter: '{c}%', color: BLUE, fontSize: 11 } },
+      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: BLUE }, itemStyle: { color: BLUE }, label: { show: true, formatter: (p: any) => (Number(p.value) === 0 ? '—' : `${p.value}%`), color: BLUE, fontSize: 11 } },
       { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: YELLOW, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
     ],
   };
@@ -156,7 +160,7 @@ const Tab1Trend: React.FC = () => {
     tooltip: baseTip, grid: { left: 8, right: 40, top: 10, bottom: 8, containLabel: true },
     xAxis: { type: 'value', ...axStyle }, yAxis: { type: 'category', data: LEAVES, inverse: true, ...axStyle },
     series: [{ type: 'bar', data: lvs.map((v, j) => ({ value: v, itemStyle: { color: LCOLOR[LEAVES[j]] } })), barWidth: 16,
-      label: { show: true, position: 'right', color: INK_SUB, fontSize: 11 } }],
+      label: { show: true, position: 'right', color: INK_SUB, fontSize: 11, formatter: labelOrDash } }],
   };
   const optYearPie = {
     tooltip: { trigger: 'item' as const, backgroundColor: 'rgba(23,32,46,0.92)', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 }, formatter: '{b}<br>{c} 天（{d}%）' },
@@ -168,15 +172,15 @@ const Tab1Trend: React.FC = () => {
   const empCols: any[] = [
     { title: '姓名', dataIndex: 'name', width: 84, fixed: 'left' },
     { title: '部门', dataIndex: 'dept', width: 100 },
-    { title: '迟到', dataIndex: 'late', width: 60, align: 'right' as const },
-    { title: '缺卡', dataIndex: 'miss', width: 60, align: 'right' as const },
-    { title: '补卡', dataIndex: 'fix', width: 60, align: 'right' as const },
-    { title: '考勤异常/旷工', dataIndex: 'abn', width: 100, align: 'right' as const },
-    ...LEAVES.map(l => ({ title: l, dataIndex: l, width: 60, align: 'right' as const })),
-    { title: '应出勤', dataIndex: 'should', width: 72, align: 'right' as const },
-    { title: '实出勤', dataIndex: 'actual', width: 72, align: 'right' as const },
+    { title: '迟到', dataIndex: 'late', width: 60, align: 'right' as const, render: fmtNum },
+    { title: '缺卡', dataIndex: 'miss', width: 60, align: 'right' as const, render: fmtNum },
+    { title: '补卡', dataIndex: 'fix', width: 60, align: 'right' as const, render: fmtNum },
+    { title: '考勤异常/旷工', dataIndex: 'abn', width: 100, align: 'right' as const, render: fmtNum },
+    ...LEAVES.map(l => ({ title: l, dataIndex: l, width: 60, align: 'right' as const, render: fmtNum })),
+    { title: '应出勤', dataIndex: 'should', width: 72, align: 'right' as const, render: fmtNum },
+    { title: '实出勤', dataIndex: 'actual', width: 72, align: 'right' as const, render: fmtNum },
     { title: '出勤率', dataIndex: 'rate', width: 72, align: 'right' as const, render: fmtPct },
-    { title: '加班(h)', dataIndex: 'ot', width: 72, align: 'right' as const },
+    { title: '加班(h)', dataIndex: 'ot', width: 72, align: 'right' as const, render: fmtNum },
   ];
   const empRows = useMemo(() => rows
     .filter((r: any) => !empQ || (r.name || '').includes(empQ) || (r.dept || '').includes(empQ))
@@ -206,7 +210,7 @@ const Tab1Trend: React.FC = () => {
           { value: T.missTotal[i], unit: '次', label: `缺卡合计（未补 ${T.miss[i]} + 已补 ${T.fix[i]}）` },
           { value: lvsSum, unit: '天', label: '假期总天数' },
           { value: T.ot[i], unit: '小时', label: '加班时长' },
-          { value: `${T.rate[i]}%`, label: '平均出勤率' },
+          { value: T.rate[i] === 0 ? '—' : `${T.rate[i]}%`, label: '平均出勤率' },
         ]} />
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} md={12}><Card size="small" title={`${yearLabel[curYear]} 假期构成`} style={cardStyle}><ChartBox option={optYearLeave} height={260} /></Card></Col>
@@ -233,12 +237,12 @@ const Tab2Balance: React.FC = () => {
       grid: { left: 8, right: 40, top: 10, bottom: 8, containLabel: true },
       xAxis: { type: 'value', ...axStyle },
       yAxis: { type: 'category', inverse: true, data: es.map(e => e[0]), ...axStyle, axisLabel: { ...axStyle.axisLabel, width: 170, overflow: 'break' } },
-      series: [{ type: 'bar', data: es.map(e => e[1]), itemStyle: { color, borderRadius: [0, 4, 4, 0] }, barWidth: 14, label: { show: true, position: 'right', color: INK_SUB, fontSize: 11 } }],
+      series: [{ type: 'bar', data: es.map(e => e[1]), itemStyle: { color, borderRadius: [0, 4, 4, 0] }, barWidth: 14, label: { show: true, position: 'right', color: INK_SUB, fontSize: 11, formatter: labelOrDash } }],
     };
   };
 
   const chgCell = (v: any) => {
-    if (v == null || Number(v) === 0) return '0';
+    if (v == null || Number(v) === 0) return '—';
     const n = Number(v);
     return <span style={{ color: n > 0 ? GREEN : RED }}>{n > 0 ? '+' : ''}{v}</span>;
   };
@@ -269,7 +273,7 @@ const Tab2Balance: React.FC = () => {
       <KpiRow items={[
         { value: BT.yq, unit: '天', label: '调整前年假余额' },
         { value: BT.yh, unit: '天', label: '签字确认后年假余额' },
-        { value: `+${BT.yc}`, unit: '天', label: '年假净变化（38人调整）', color: GREEN },
+        { value: BT.yc === 0 ? '—' : `+${BT.yc}`, unit: '天', label: '年假净变化（38人调整）', color: GREEN },
         { value: Math.round(BT.tq * 100) / 100, unit: '天', label: '调整前调休余额' },
         { value: Math.round(BT.th * 100) / 100, unit: '天', label: '签字确认后调休余额' },
         { value: BT.tc, unit: '天', label: '调休净变化（19人调整）', color: GOLD },
@@ -303,7 +307,7 @@ const Tab3MissOverview: React.FC = () => {
     series: [
       { name: '已补卡', type: 'bar', stack: 'x', data: MO.months.map((m: any) => m.fixed), itemStyle: { color: GREEN, borderRadius: [4, 4, 0, 0] }, barWidth: 28 },
       { name: '未补卡', type: 'bar', stack: 'x', data: MO.months.map((m: any) => m.unfixed), itemStyle: { color: RED } },
-      { name: '缺卡总数', type: 'line', data: MO.months.map((m: any) => m.total), itemStyle: { color: GOLD }, lineStyle: { width: 2.5, color: GOLD }, label: { show: true, color: GOLD, fontSize: 11 } },
+      { name: '缺卡总数', type: 'line', data: MO.months.map((m: any) => m.total), itemStyle: { color: GOLD }, lineStyle: { width: 2.5, color: GOLD }, label: { show: true, color: GOLD, fontSize: 11, formatter: labelOrDash } },
       { name: '涉及人数', type: 'line', yAxisIndex: 1, data: MO.months.map((m: any) => m.ppl), itemStyle: { color: BLUE }, lineStyle: { width: 2, type: 'dashed', color: BLUE } },
     ],
   };
@@ -328,7 +332,7 @@ const Tab3MissOverview: React.FC = () => {
     { title: '3月', dataIndex: 'm3', width: 70, align: 'right' as const, render: fmtNum },
     { title: '4月', dataIndex: 'm4', width: 70, align: 'right' as const, render: fmtNum },
     { title: '5月', dataIndex: 'm5', width: 70, align: 'right' as const, render: fmtNum },
-    { title: '总计', dataIndex: 'total', width: 80, align: 'right' as const, render: (v: any) => <strong>{v}</strong> },
+    { title: '总计', dataIndex: 'total', width: 80, align: 'right' as const, render: (v: any) => <strong>{fmtNum(v)}</strong> },
   ];
 
   return (
@@ -352,7 +356,7 @@ const Tab3MissOverview: React.FC = () => {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><strong>合计</strong></Table.Summary.Cell>
               {monthTotals.map((v, idx) => <Table.Summary.Cell key={idx} index={idx + 1} align="right"><strong>{fmtNum(v)}</strong></Table.Summary.Cell>)}
-              <Table.Summary.Cell index={6} align="right"><strong>{sum(MO.people.map((p: any) => p.total))}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={6} align="right"><strong>{fmtNum(sum(MO.people.map((p: any) => p.total)))}</strong></Table.Summary.Cell>
             </Table.Summary.Row>
           )} />
       </Card>
@@ -399,8 +403,8 @@ const Tab4MissDetail: React.FC = () => {
         summary={() => (
           <Table.Summary.Row>
             <Table.Summary.Cell index={0} colSpan={3}><strong>共 {rows.length} 条</strong></Table.Summary.Cell>
-            <Table.Summary.Cell index={3} align="right"><strong>{sum(rows.map((r: any) => r.miss))}</strong></Table.Summary.Cell>
-            <Table.Summary.Cell index={4} align="right"><strong>{sum(rows.map((r: any) => r.late))}</strong></Table.Summary.Cell>
+            <Table.Summary.Cell index={3} align="right"><strong>{fmtNum(sum(rows.map((r: any) => r.miss)))}</strong></Table.Summary.Cell>
+            <Table.Summary.Cell index={4} align="right"><strong>{fmtNum(sum(rows.map((r: any) => r.late)))}</strong></Table.Summary.Cell>
             <Table.Summary.Cell index={5} colSpan={4} />
           </Table.Summary.Row>
         )} />
@@ -426,7 +430,7 @@ const Tab5Offsys: React.FC = () => {
     { title: '请假类型', dataIndex: 'type', width: 110 },
     { title: '开始', dataIndex: 'start', width: 110 },
     { title: '结束', dataIndex: 'end', width: 110 },
-    { title: '天数', dataIndex: 'days', width: 70, align: 'right' as const },
+    { title: '天数', dataIndex: 'days', width: 70, align: 'right' as const, render: fmtNum },
     { title: '邮件发送日期', dataIndex: 'mail', width: 110, render: (v: any) => v ? String(v).slice(0, 10) : '' },
     { title: '请假时间点', dataIndex: 'point', width: 140 },
     { title: '请假原因说明', dataIndex: 'reason', width: 220 },
@@ -474,7 +478,7 @@ const Tab6LeaveMix: React.FC = () => {
   const cols: any[] = [
     { title: '月份', dataIndex: 'm', width: 90, fixed: 'left' as const },
     ...LEAVES.map(l => ({ title: l, dataIndex: l, width: 64, align: 'right' as const, render: fmtNum })),
-    { title: '合计', dataIndex: 'total', width: 70, align: 'right' as const, render: (v: any) => <strong>{v}</strong> },
+    { title: '合计', dataIndex: 'total', width: 70, align: 'right' as const, render: (v: any) => <strong>{fmtNum(v)}</strong> },
   ];
   const rows = LM.months.map((m: any, idx: number) => ({
     ...m,
@@ -495,7 +499,7 @@ const Tab6LeaveMix: React.FC = () => {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><strong>总计</strong></Table.Summary.Cell>
               {LEAVES.map((l, idx) => <Table.Summary.Cell key={l} index={idx + 1} align="right"><strong>{fmtNum(LM.total[l])}</strong></Table.Summary.Cell>)}
-              <Table.Summary.Cell index={10} align="right"><strong>{grandTotal}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={10} align="right"><strong>{fmtNum(grandTotal)}</strong></Table.Summary.Cell>
             </Table.Summary.Row>
           )} />
       </Card>
