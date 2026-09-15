@@ -12,6 +12,7 @@ import { exportSummaryPdf } from '../utils/pdfExport';
 import { round2 } from '../utils/round';
 import { useStore } from '../stores/appStore';
 import { ensureRoster } from '../utils/roster';
+import HistoricalAttendanceOverview from './HistoricalAttendanceOverview';
 
 const defaultPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
@@ -203,10 +204,15 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     try {
       const prev = prevPeriod(period);
-      // 确保该月花名册已生成
+      // 确保该月及上月花名册已生成
       await ensureRoster(period);
-      const empRes = await api.get(`/employees?select=unique_hash,name,status,pay_company,cost_center,department,entry_date,leave_date,basic_salary,provision_welfare&period=eq.${period}`);
+      await ensureRoster(prev);
+      const [empRes, empPrevRes] = await Promise.all([
+        api.get(`/employees?select=unique_hash,name,status,pay_company,cost_center,department,entry_date,leave_date,basic_salary,provision_welfare&period=eq.${period}`),
+        api.get(`/employees?select=unique_hash,name,status,pay_company,cost_center,department,entry_date,leave_date&period=eq.${prev}`),
+      ]);
       const empList: any[] = empRes.data;
+      const prevEmpList: any[] = empPrevRes.data;
       const activeEmps = empList.filter((e: any) => isActiveInPeriod(e, period));
       const empMap: Record<string, any> = {};
       empList.forEach((e: any) => { empMap[e.unique_hash] = e; });
@@ -379,7 +385,7 @@ const Dashboard: React.FC = () => {
 
       // ===== 花名册变动 =====
       const additions = activeEmps.filter((e: any) => e.entry_date && e.entry_date.startsWith(period)).map((e: any) => ({ key: e.unique_hash, name: e.name, department: e.department || '', date: e.entry_date, cost_center: e.cost_center || '' }));
-      const removals = empList.filter((e: any) => e.leave_date && e.leave_date.startsWith(period)).map((e: any) => ({ key: e.unique_hash, name: e.name, department: e.department || '', date: e.leave_date, cost_center: e.cost_center || '' }));
+      const removals = prevEmpList.filter((e: any) => e.leave_date && e.leave_date.startsWith(prev)).map((e: any) => ({ key: e.unique_hash, name: e.name, department: e.department || '', date: e.leave_date, cost_center: e.cost_center || '' }));
       const prevActiveCount = activeEmps.length - additions.length + removals.length;
       setRosterChanges({ additions, removals, prevActiveCount });
     } catch { message.error('加载数据总览失败'); }
@@ -733,6 +739,10 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      <Tabs defaultActiveKey="salary" items={[
+        {
+          key: 'salary', label: '薪资数据总览', children: (
+            <>
       {/* 核心指标卡（7张一行，等宽） */}
       <Row gutter={12} style={{ marginBottom: 16 }}>
         <Col flex="1"><MetricCard title="员工总数" value={stats?.employee_count || 0} unit="人" icon={<TeamOutlined />} color={paletteColor(0)} /></Col>
@@ -908,6 +918,11 @@ const Dashboard: React.FC = () => {
           />
         </div>
       </Card>
+            </>
+          ),
+        },
+        { key: 'attendance', label: '历史考勤数据总览', children: <HistoricalAttendanceOverview /> },
+      ]} />
     </div>
   );
 };
