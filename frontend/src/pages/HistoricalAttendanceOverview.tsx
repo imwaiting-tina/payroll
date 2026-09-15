@@ -112,9 +112,9 @@ const Tab1Trend: React.FC = () => {
     tooltip: baseTip, grid: { left: 8, right: 24, top: 30, bottom: 8, containLabel: true },
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: { type: 'value', ...axStyle },
-    series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: PALETTE[0] }, itemStyle: { color: PALETTE[0] },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(27,58,92,0.22)' }, { offset: 1, color: 'rgba(27,58,92,0)' }] } },
-      label: { show: true, color: PALETTE[0], fontSize: 11 } }],
+    series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: ACCENT }, itemStyle: { color: ACCENT },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(192,112,58,0.22)' }, { offset: 1, color: 'rgba(192,112,58,0)' }] } },
+      label: { show: true, color: '#D68C58', fontSize: 11 } }],
   };
   const optMiss = {
     tooltip: baseTip, grid: { left: 8, right: 24, top: 40, bottom: 8, containLabel: true },
@@ -138,7 +138,7 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: [{ type: 'value', name: '%', min: 90, max: 100, ...axStyle }, { type: 'value', name: '小时', ...axStyle, splitLine: { show: false } }],
     series: [
-      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: PALETTE[1] }, itemStyle: { color: PALETTE[1] }, label: { show: true, formatter: '{c}%', color: PALETTE[1], fontSize: 11 } },
+      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: ACCENT }, itemStyle: { color: ACCENT }, label: { show: true, formatter: '{c}%', color: '#D68C58', fontSize: 11 } },
       { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: SECONDARY, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
     ],
   };
