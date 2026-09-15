@@ -15,24 +15,27 @@ const D: any = ATTENDANCE_HISTORY;
 const INK = '#1f2937';
 const INK_SUB = '#6b7280';
 const BORDER = '#e6e9ef';
-// 用户指定配色：蓝系主色 + 橙色强调 + 红色负向 + 中性灰
-const PRIMARY = '#1B3A5C';   // 主色：迟到折线、出勤率线
-const SECONDARY = '#2F6A9E'; // 辅色：次要系列、加班柱
-const LIGHT = '#7BA5C6';     // 浅调：加班时长、已通过项
-const ACCENT = '#C0703A';    // 强调色：合计虚线、峰值标注
-const NEGATIVE = '#A6452F';  // 负向指标：迟到、缺卡未补卡
-const GRAY = '#78828E';      // 中性灰：参考线、非重点系列
+// ===== 原始 Kimi 看板配色（https://fhlzzxnupgxh6.ok.kimi.link/） =====
+const C = {
+  a: '#c08a5a',  // 主色：迟到折线、缺卡合计/总数线、年假原因
+  g: '#7d9b76',  // 绿：补卡已通过/已补卡、调休原因
+  b: '#8a9bbd',  // 蓝：平均出勤率线、涉及人数线
+  r: '#c9a0a0',  // 红：缺卡未补卡/未补卡
+  y: '#d4b483',  // 黄：加班总时长、缺卡分类第三项
+};
 
-// 兼容旧槽位，映射到用户配色
-const GREEN = LIGHT;    // 已通过项 → 浅调
-const RED = NEGATIVE;   // 未补卡/负向 → 负向
-const GOLD = ACCENT;    // 合计虚线 → 强调色
-const PALETTE = [PRIMARY, PRIMARY, SECONDARY, LIGHT, ACCENT, NEGATIVE, GRAY, '#8E7A9E', '#5B8E8E', '#7A9B6E'];
+const ACCENT = C.a;   // 迟到折线
+const GREEN = C.g;    // 补卡已通过/已补卡
+const RED = C.r;      // 缺卡未补卡/未补卡
+const GOLD = C.a;     // 缺卡合计/缺卡总数
+const BLUE = C.b;     // 平均出勤率线、涉及人数线
+const YELLOW = C.y;   // 加班总时长
+const PALETTE = [C.a, C.a, C.b, C.y, C.r, C.g, C.g, C.y, C.b, C.r];
 
 const LEAVES = ['年假', '调休', '事假', '病假', '婚假', '丧假', '产假', '陪产假', '育儿假'];
 const LCOLOR: Record<string, string> = {
-  年假: PRIMARY, 调休: SECONDARY, 事假: LIGHT, 病假: NEGATIVE, 婚假: ACCENT,
-  丧假: GRAY, 产假: '#8E7A9E', 陪产假: '#5B8E8E', 育儿假: '#7A9B6E',
+  年假: '#c08a5a', 调休: '#7d9b76', 事假: '#8a9bbd', 病假: '#c9a0a0', 婚假: '#d4b483',
+  丧假: '#9a928a', 产假: '#b5a3c9', 陪产假: '#8fb8b0', 育儿假: '#d9a0a8',
 };
 
 const cardStyle: React.CSSProperties = {
@@ -113,8 +116,8 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: { type: 'value', ...axStyle },
     series: [{ type: 'line', data: T.late, smooth: true, symbolSize: 8, lineStyle: { width: 3, color: ACCENT }, itemStyle: { color: ACCENT },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(192,112,58,0.22)' }, { offset: 1, color: 'rgba(192,112,58,0)' }] } },
-      label: { show: true, color: '#D68C58', fontSize: 11 } }],
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(192,138,90,0.25)' }, { offset: 1, color: 'rgba(192,138,90,0)' }] } },
+      label: { show: true, color: ACCENT, fontSize: 11 } }],
   };
   const optMiss = {
     tooltip: baseTip, grid: { left: 8, right: 24, top: 40, bottom: 8, containLabel: true },
@@ -138,8 +141,8 @@ const Tab1Trend: React.FC = () => {
     xAxis: { type: 'category', data: xYear, ...axStyle },
     yAxis: [{ type: 'value', name: '%', min: 90, max: 100, ...axStyle }, { type: 'value', name: '小时', ...axStyle, splitLine: { show: false } }],
     series: [
-      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: ACCENT }, itemStyle: { color: ACCENT }, label: { show: true, formatter: '{c}%', color: '#D68C58', fontSize: 11 } },
-      { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: SECONDARY, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
+      { name: '平均出勤率', type: 'line', data: T.rate, symbolSize: 8, lineStyle: { width: 3, color: BLUE }, itemStyle: { color: BLUE }, label: { show: true, formatter: '{c}%', color: BLUE, fontSize: 11 } },
+      { name: '加班总时长', type: 'bar', yAxisIndex: 1, data: T.ot, itemStyle: { color: YELLOW, borderRadius: [4, 4, 0, 0] }, barWidth: 24 },
     ],
   };
 
@@ -301,13 +304,13 @@ const Tab3MissOverview: React.FC = () => {
       { name: '已补卡', type: 'bar', stack: 'x', data: MO.months.map((m: any) => m.fixed), itemStyle: { color: GREEN, borderRadius: [4, 4, 0, 0] }, barWidth: 28 },
       { name: '未补卡', type: 'bar', stack: 'x', data: MO.months.map((m: any) => m.unfixed), itemStyle: { color: RED } },
       { name: '缺卡总数', type: 'line', data: MO.months.map((m: any) => m.total), itemStyle: { color: GOLD }, lineStyle: { width: 2.5, color: GOLD }, label: { show: true, color: GOLD, fontSize: 11 } },
-      { name: '涉及人数', type: 'line', yAxisIndex: 1, data: MO.months.map((m: any) => m.ppl), itemStyle: { color: GRAY }, lineStyle: { width: 2, type: 'dashed', color: GRAY } },
+      { name: '涉及人数', type: 'line', yAxisIndex: 1, data: MO.months.map((m: any) => m.ppl), itemStyle: { color: BLUE }, lineStyle: { width: 2, type: 'dashed', color: BLUE } },
     ],
   };
   const optMissCat = {
     tooltip: { trigger: 'item' as const, backgroundColor: 'rgba(23,32,46,0.92)', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 }, formatter: '{b}<br>{c} 次（{d}%）' },
     series: [{ type: 'pie', radius: ['38%', '62%'], center: ['50%', '50%'],
-      data: MO.cat.map((c: any, i: number) => ({ name: c.k, value: c.v, itemStyle: { color: [GREEN, RED, GOLD][i] } })),
+      data: MO.cat.map((c: any, i: number) => ({ name: c.k, value: c.v, itemStyle: { color: [GREEN, RED, YELLOW][i] } })),
       label: { color: INK_SUB, fontSize: 11, formatter: '{b}\n{d}%' }, itemStyle: { borderColor: '#fff', borderWidth: 2 } }],
   };
 
@@ -413,7 +416,7 @@ const Tab5Offsys: React.FC = () => {
   const optOffType = {
     tooltip: { trigger: 'item' as const, backgroundColor: 'rgba(23,32,46,0.92)', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 }, formatter: '{b}<br>{c} 条（{d}%）' },
     series: [{ type: 'pie', radius: ['40%', '66%'], center: ['50%', '50%'],
-      data: Object.entries(OC).map(([k, v], i) => ({ name: k, value: v, itemStyle: { color: [PRIMARY, LIGHT, SECONDARY, ACCENT, NEGATIVE][i % 5] } })),
+      data: Object.entries(OC).map(([k, v], i) => ({ name: k, value: v, itemStyle: { color: [ACCENT, GREEN, BLUE, YELLOW, RED][i % 5] } })),
       label: { color: INK_SUB, fontSize: 11 }, itemStyle: { borderColor: '#fff', borderWidth: 2 } }],
   };
 
