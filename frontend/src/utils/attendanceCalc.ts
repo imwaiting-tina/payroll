@@ -26,12 +26,20 @@ export interface OvertimeRate {
   rate: number;                // 倍率
 }
 
+/** 病假直接替换规则（2026-09-01 起：病假工资 = 最低工资 × 支付系数，替换工龄分档） */
+export interface SickFlatRule {
+  effective_date: string;   // 生效日期 'YYYY-MM-DD'
+  min_wage: number;         // 最低工资基数
+  pay_rate: number;         // 支付系数 0-1
+}
+
 /** 考勤计算规则（对应 attendance_rules 表） */
 export interface AttendanceRules {
   sick_lt_6m: SickPayTier[];       // 连续病假 ≤ 6 个月（疾病休假工资）
   sick_gte_6m: SickPayTier[];      // 连续病假 > 6 个月（疾病救济费）
   pay_days_options: number[];      // 计薪天数选项
   overtime_rates: OvertimeRate[];  // 加班倍率
+  sick_flat_rule: SickFlatRule | null;  // 病假直接替换规则（生效日起替换工龄分档）
 }
 
 /** 内置默认规则（与 attendance_rules 表种子数据一致） */
@@ -55,6 +63,7 @@ export const DEFAULT_ATTENDANCE_RULES: AttendanceRules = {
     { type: '法定节假日加班', rate: 3 },
     { type: '保安法定加班', rate: 2 },
   ],
+  sick_flat_rule: { effective_date: '2026-09-01', min_wage: 2740, pay_rate: 0.8 },
 };
 
 /** 安全解析 JSONB 值（PostgREST 可能已解析成对象，也可能是 JSON 字符串） */
@@ -81,6 +90,7 @@ export function parseAttendanceRules(raw: any[]): AttendanceRules {
     sick_gte_6m: DEFAULT_ATTENDANCE_RULES.sick_gte_6m.map(t => ({ ...t })),
     pay_days_options: [...DEFAULT_ATTENDANCE_RULES.pay_days_options],
     overtime_rates: DEFAULT_ATTENDANCE_RULES.overtime_rates.map(o => ({ ...o })),
+    sick_flat_rule: DEFAULT_ATTENDANCE_RULES.sick_flat_rule ? { ...DEFAULT_ATTENDANCE_RULES.sick_flat_rule } : null,
   };
   if (!Array.isArray(raw)) return out;
 
@@ -99,6 +109,15 @@ export function parseAttendanceRules(raw: any[]): AttendanceRules {
   const or = asValue(byKey['overtime_rates']?.rule_value);
   if (Array.isArray(or) && or.length) {
     out.overtime_rates = or.map((o: any) => ({ type: String(o?.type ?? ''), rate: Number(o?.rate ?? 1) }));
+  }
+
+  const sf = asValue(byKey['sick_flat_rule']?.rule_value);
+  if (sf && typeof sf === 'object') {
+    out.sick_flat_rule = {
+      effective_date: String(sf.effective_date ?? ''),
+      min_wage: Number(sf.min_wage ?? 0),
+      pay_rate: Number(sf.pay_rate ?? 0),
+    };
   }
 
   return out;
@@ -228,6 +247,7 @@ export interface AttendanceInput {
 export interface AttendanceResult {
   seniority_years: number;
   daily_wage: number;
+  sick_rule_type: 'seniority' | 'flat';
   sick_pay_rate: number;
   sick_deduct_rate: number;
   sick_amount: number;
@@ -267,20 +287,34 @@ export function calcAttendance(input: AttendanceInput): AttendanceResult {
   const continuousDays = input.is_continuous_sick
     ? calcContinuousSickDays(input.continuous_sick_start || '', input.continuous_sick_end || '')
     : 0;
-  const sickPayRate = calcSickPayRate(
+  const seniorityPayRate = calcSickPayRate(
     seniorityBase, input.period, !!input.is_continuous_sick, continuousDays, rules
   );
-  const sickDeductRate = round2(1 - sickPayRate);
-  // 病假金额：
-  //  - 连续病假且覆盖某个完整月（1号到月末都在病假内）→ 考勤工资 × 病假扣款系数（扣款，输出时取负）
-  //  - 否则 → 日薪 × 天数 × 扣款系数（扣款，输出时取负）
+  // 连续病假是否覆盖某个完整月（1号到月末都在病假内）
   const coversFullMonth = !!input.is_continuous_sick && isFullMonthSick(input.continuous_sick_start || '', input.continuous_sick_end || '');
-  let sickAmount: number;
-  if (coversFullMonth) {
-    sickAmount = wage * sickDeductRate;
+
+  // 病假对应的正常工资毛额：整月 → 整月考勤工资；否则 → 日薪 × 病假天数
+  const grossSick = coversFullMonth ? wage : dailyWage * sickDays;
+
+  // 病假实发工资：
+  //  - sick_flat_rule 生效日起（默认 2026-09-01）：直接按「最低工资 × 支付系数」计发，替换工龄分档
+  //  - 生效前：按工龄分档（本人工资 × 支付系数）
+  const flat = rules.sick_flat_rule;
+  const useFlat = !!flat && !!flat.effective_date && `${input.period}-01` >= flat.effective_date;
+  let sickPayRate: number;
+  let sickPay: number;
+  if (useFlat && flat) {
+    sickPayRate = Number(flat.pay_rate ?? 0);
+    const fraction = coversFullMonth ? 1 : (payDays > 0 ? sickDays / payDays : 0);
+    sickPay = Number(flat.min_wage ?? 0) * sickPayRate * fraction;
   } else {
-    sickAmount = dailyWage * sickDays * sickDeductRate;
+    sickPayRate = seniorityPayRate;
+    sickPay = grossSick * sickPayRate;
   }
+  // 病假扣款（正数 = 扣款，输出时取负）
+  const sickAmount = grossSick - sickPay;
+  // 实际扣款系数（相对本人病假毛额）：旧规则 = 1 - 支付系数；新规则 = 实际扣款比例
+  const sickDeductRate = grossSick > 0 ? round2(sickAmount / grossSick) : round2(1 - sickPayRate);
 
   // 事假（日薪×天数，扣款为负）
   const personalDays = Number(input.personal_days || 0);
@@ -349,6 +383,7 @@ export function calcAttendance(input: AttendanceInput): AttendanceResult {
   return {
     seniority_years: round2(seniorityYears),
     daily_wage: dailyWage,
+    sick_rule_type: useFlat ? 'flat' : 'seniority',
     sick_pay_rate: sickPayRate,
     sick_deduct_rate: sickDeductRate,
     sick_amount: round2(sickAmountSigned),          // 展示用，四舍五入

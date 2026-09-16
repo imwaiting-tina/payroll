@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Tag, message, Descriptions, Button, Space, InputNumber, Select, Input, Popconfirm } from 'antd';
+import { Card, Table, Tag, message, Descriptions, Button, Space, InputNumber, Select, Input, Popconfirm, DatePicker } from 'antd';
 import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import api from '../../api/client';
-import { DEFAULT_ATTENDANCE_RULES, type SickPayTier, type OvertimeRate } from '../../utils/attendanceCalc';
+import { DEFAULT_ATTENDANCE_RULES, type SickPayTier, type OvertimeRate, type SickFlatRule } from '../../utils/attendanceCalc';
 
 /**
  * 考勤规则配置页面
@@ -22,6 +23,9 @@ const AttendanceRulesPage: React.FC = () => {
   const [sickGte6m, setSickGte6m] = useState<SickPayTier[]>(DEFAULT_ATTENDANCE_RULES.sick_gte_6m);
   const [payDays, setPayDays] = useState<string>(DEFAULT_ATTENDANCE_RULES.pay_days_options.join(','));
   const [overtimeRates, setOvertimeRates] = useState<OvertimeRate[]>(DEFAULT_ATTENDANCE_RULES.overtime_rates);
+  const [sickFlatRule, setSickFlatRule] = useState<SickFlatRule>(
+    DEFAULT_ATTENDANCE_RULES.sick_flat_rule || { effective_date: '2026-09-01', min_wage: 2740, pay_rate: 0.8 }
+  );
 
   // 数据库原始行（对照表）
   const [dbRows, setDbRows] = useState<any[]>([]);
@@ -54,6 +58,14 @@ const AttendanceRulesPage: React.FC = () => {
       const or = parse(byKey['overtime_rates']?.rule_value);
       if (Array.isArray(or) && or.length) {
         setOvertimeRates(or.map((o: any) => ({ type: String(o?.type ?? ''), rate: Number(o?.rate ?? 1) })));
+      }
+      const sf = parse(byKey['sick_flat_rule']?.rule_value);
+      if (sf && typeof sf === 'object') {
+        setSickFlatRule({
+          effective_date: String(sf.effective_date ?? ''),
+          min_wage: Number(sf.min_wage ?? 0),
+          pay_rate: Number(sf.pay_rate ?? 0),
+        });
       }
     } catch { message.error('加载规则失败'); }
     finally { setLoading(false); }
@@ -98,11 +110,15 @@ const AttendanceRulesPage: React.FC = () => {
     for (const o of overtimeRates) {
       if (o.rate <= 0) { message.warning('加班倍率必须大于 0'); return; }
     }
+    if (!sickFlatRule.effective_date) { message.warning('病假直接替换规则：请填写生效日期'); return; }
+    if (sickFlatRule.min_wage <= 0) { message.warning('病假直接替换规则：最低工资基数必须大于 0'); return; }
+    if (sickFlatRule.pay_rate < 0 || sickFlatRule.pay_rate > 1) { message.warning('病假直接替换规则：支付系数必须在 0 到 1 之间'); return; }
 
     setSaving(true);
     try {
       await upsertRule('sick_lt_6m', '连续病假6个月内', sickLt6m);
       await upsertRule('sick_gte_6m', '连续病假超6个月（疾病救济费）', sickGte6m);
+      await upsertRule('sick_flat_rule', '病假直接替换规则（2026-09-01 起）', sickFlatRule);
       await upsertRule('pay_days_options', '计薪天数', { options: pdNums });
       await upsertRule('overtime_rates', '加班倍数', overtimeRates);
       message.success('规则已保存，考勤自动计算将按新规则执行');
@@ -117,6 +133,7 @@ const AttendanceRulesPage: React.FC = () => {
   const handleReset = async () => {
     setSickLt6m(DEFAULT_ATTENDANCE_RULES.sick_lt_6m);
     setSickGte6m(DEFAULT_ATTENDANCE_RULES.sick_gte_6m);
+    setSickFlatRule(DEFAULT_ATTENDANCE_RULES.sick_flat_rule || { effective_date: '2026-09-01', min_wage: 2740, pay_rate: 0.8 });
     setPayDays(DEFAULT_ATTENDANCE_RULES.pay_days_options.join(','));
     setOvertimeRates(DEFAULT_ATTENDANCE_RULES.overtime_rates);
     message.info('已恢复默认值，点「保存规则」后生效');
@@ -191,6 +208,30 @@ const AttendanceRulesPage: React.FC = () => {
         <Button size="small" style={{ marginTop: 8 }} onClick={() => setSickGte6m([...sickGte6m, { min_years: 0, max_years: null, pay_rate: 0.6 }])}>
           + 加一档
         </Button>
+      </Card>
+
+      <Card size="small" title="病假直接替换规则（生效日起病假工资 = 最低工资 × 支付系数）" style={{ marginBottom: 12 }}>
+        <Space wrap size="large">
+          <span>生效日期：
+            <DatePicker
+              value={sickFlatRule.effective_date ? dayjs(sickFlatRule.effective_date) : undefined}
+              onChange={(d) => setSickFlatRule({ ...sickFlatRule, effective_date: d ? d.format('YYYY-MM-DD') : '' })}
+              style={{ width: 150 }}
+            />
+          </span>
+          <span>最低工资基数：
+            <InputNumber size="small" min={0} step={10} value={sickFlatRule.min_wage}
+              onChange={(v) => setSickFlatRule({ ...sickFlatRule, min_wage: Number(v ?? 0) })} style={{ width: 130 }} />
+          </span>
+          <span>支付系数：
+            <InputNumber size="small" min={0} max={1} step={0.05} value={sickFlatRule.pay_rate}
+              onChange={(v) => setSickFlatRule({ ...sickFlatRule, pay_rate: Number(v ?? 0) })} style={{ width: 110 }} />
+          </span>
+          <Tag color="blue">{Math.round(sickFlatRule.pay_rate * 100)}%</Tag>
+        </Space>
+        <div style={{ color: '#888', marginTop: 8 }}>
+          生效日期前仍按上面的工龄分档（60%–100%）计算；生效日期起，病假工资直接按「最低工资 × 支付系数」计发，工龄分档不再适用。
+        </div>
       </Card>
 
       <Card size="small" title="计薪天数" style={{ marginBottom: 12 }}>
