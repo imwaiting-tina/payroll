@@ -6,6 +6,7 @@ import { recalcAllTaxes } from '../../utils/taxRecalc';
 import { useStore } from '../../stores/appStore';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import { isActiveInPeriod } from '../../utils/employee';
 
 /**
@@ -186,7 +187,7 @@ const TaxOpeningPage: React.FC = () => {
           <Button icon={<UploadOutlined />}>导入</Button>
         </Upload>
       </Space>
-      <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1400, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1400 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
 };

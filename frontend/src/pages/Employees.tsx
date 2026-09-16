@@ -8,6 +8,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { exportXlsx, importXlsx, type ExportDef } from '../utils/importExport';
 import { genUniqueHash } from '../utils/hash';
 import { withSource } from '../components/SourceTag';
+import FitHeightTable from '../components/FitHeightTable';
 import { useStore } from '../stores/appStore';
 import { canSubmit, canApprove } from '../utils/permissions';
 import { fetchApprovalStatus } from '../utils/approvalStatus';
@@ -575,11 +576,11 @@ const EmployeesPage: React.FC = () => {
         </Space>
       </Card>
 
-      <Table
+      <FitHeightTable
         columns={columns}
         dataSource={employees.map(e => ({ ...e, key: e.id }))}
         loading={loading}
-        scroll={{ x: 1400, y: 480 }}
+        scroll={{ x: 1400 }}
         size="small"
         pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 人` }}
       />

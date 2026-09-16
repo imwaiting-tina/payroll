@@ -5,6 +5,7 @@ import api, { bulkUpsert } from '../../api/client';
 import { recalcAllTaxes } from '../../utils/taxRecalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import { useStore } from '../../stores/appStore';
 import { ensureRoster } from '../../utils/roster';
 import { DataStatusTag, anyLocked } from '../../components/DataStatusTag';
@@ -191,7 +192,7 @@ const TaxSpecialDeductionsPage: React.FC = () => {
           <Button icon={<UploadOutlined />} disabled={locked}>导入</Button>
         </Upload>
       </Space>
-      <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1800, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1800 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
 };

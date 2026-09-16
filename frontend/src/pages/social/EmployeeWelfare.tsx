@@ -9,6 +9,7 @@ import type { SocialWelfareSet, HousingFundSet, EmployeeWelfareRecord } from '..
 import { calcSocial, calcHousingFund } from '../../utils/welfareCalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import CalcProgress from '../../components/CalcProgress';
 import { DataStatusTag, anyLocked } from '../../components/DataStatusTag';
 import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
@@ -683,7 +684,7 @@ const EmployeeWelfare: React.FC = () => {
       </Card>
 
       <div ref={scrollRef} onWheel={onWheel}>
-        <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1800, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+        <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1800 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
       </div>
 
       {/* 编辑抽屉 */}

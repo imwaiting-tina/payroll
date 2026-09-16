@@ -5,6 +5,7 @@ import api, { bulkUpsert } from '../api/client';
 import { recalcAllTaxes } from '../utils/taxRecalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../utils/importExport';
 import { withSource } from '../components/SourceTag';
+import FitHeightTable from '../components/FitHeightTable';
 import { useHorizontalScroll } from '../utils/useHorizontalScroll';
 import { isActiveInPeriod } from '../utils/employee';
 import { round2 } from '../utils/round';
@@ -263,12 +264,8 @@ const AdditionalSalaryPage: React.FC = () => {
         </Space>
       </Card>
 
-      <div ref={scrollRef} onWheel={onWheel}>
-        <Table columns={columns} dataSource={records} loading={loading} scroll={{ x: 2200, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
-      </div>
-
-      {/* 字段注释（分页器下方） */}
-      <Card size="small" style={{ marginTop: 12 }}>
+      {/* 字段注释（表格上方） */}
+      <Card size="small" style={{ marginBottom: 12 }}>
         <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>字段注释</Typography.Title>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 24px', fontSize: 13 }}>
           {FIELD_NOTES.map(([field, note]) => (
@@ -279,6 +276,10 @@ const AdditionalSalaryPage: React.FC = () => {
           ))}
         </div>
       </Card>
+
+      <div ref={scrollRef} onWheel={onWheel}>
+        <FitHeightTable columns={columns} dataSource={records} loading={loading} scroll={{ x: 2200 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      </div>
     </div>
   );
 };

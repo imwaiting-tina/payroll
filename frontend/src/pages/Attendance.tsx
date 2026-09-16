@@ -10,6 +10,7 @@ import { exportXlsx, importXlsx, type ExportDef } from '../utils/importExport';
 import { calcAttendance, parseAttendanceRules, type AttendanceRules, DEFAULT_ATTENDANCE_RULES } from '../utils/attendanceCalc';
 import { isActiveInPeriod } from '../utils/employee';
 import { withSource } from '../components/SourceTag';
+import FitHeightTable from '../components/FitHeightTable';
 import { useHorizontalScroll } from '../utils/useHorizontalScroll';
 import { useStore } from '../stores/appStore';
 import { ensureRoster } from '../utils/roster';
@@ -940,7 +941,7 @@ const AttendancePage: React.FC = () => {
       </Card>
 
       <div ref={scrollRef} onWheel={onWheel}>
-        <Table columns={columns} dataSource={records} loading={loading} scroll={{ x: 2400, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+        <FitHeightTable columns={columns} dataSource={records} loading={loading} scroll={{ x: 2400 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
       </div>
 
       {/* 详情抽屉 */}

@@ -4,6 +4,7 @@ import { DownloadOutlined, CheckCircleOutlined, RollbackOutlined, SendOutlined, 
 import api, { bulkUpsert } from '../api/client';
 import { exportXlsx, type ExportDef } from '../utils/importExport';
 import { withSource } from '../components/SourceTag';
+import FitHeightTable from '../components/FitHeightTable';
 import { useHorizontalScroll } from '../utils/useHorizontalScroll';
 import { isActiveInPeriod } from '../utils/employee';
 import { calcServiceTax } from '../utils/taxCalc';
@@ -652,7 +653,7 @@ const PayrollPage: React.FC = () => {
       </Card>
 
       <div ref={scrollRef} onWheel={onWheel}>
-        <Table columns={columns} dataSource={records} loading={loading} scroll={{ x: 2400, y: 480 }} size="small" pagination={{ defaultPageSize: 30, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+        <FitHeightTable columns={columns} dataSource={records} loading={loading} scroll={{ x: 2400 }} size="small" pagination={{ defaultPageSize: 30, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
       </div>
 
       {/* 审批弹窗 */}

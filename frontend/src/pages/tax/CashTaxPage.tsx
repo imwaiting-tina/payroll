@@ -4,6 +4,7 @@ import { CalculatorOutlined, DownloadOutlined, SearchOutlined } from '@ant-desig
 import api, { bulkUpsert } from '../../api/client';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import { isActiveInPeriod } from '../../utils/employee';
 import { round2 } from '../../utils/round';
 import { useStore } from '../../stores/appStore';
@@ -142,7 +143,7 @@ const CashTaxPage: React.FC = () => {
       <div style={{ marginBottom: 12, color: '#888' }}>
         计算口径：当月个人所得税 = 薪资小计 × 3%。
       </div>
-      <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 800, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 800 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
 };

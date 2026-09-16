@@ -4,6 +4,7 @@ import { CalculatorOutlined, SaveOutlined, DownloadOutlined, SearchOutlined } fr
 import api, { bulkUpsert } from '../../api/client';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import { isActiveInPeriod } from '../../utils/employee';
 import { calcServiceTax } from '../../utils/taxCalc';
 import { useStore } from '../../stores/appStore';
@@ -146,7 +147,7 @@ const ServiceTaxPage: React.FC = () => {
         ② 套三级预扣率：≤2万 20%、2万-5万 30%（速算扣除 2000）、5万以上 40%（速算扣除 7000）；
         ③ 应预扣税额 = 应纳税所得额 × 预扣率 − 速算扣除数。
       </div>
-      <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 800, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 800 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
 };

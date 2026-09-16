@@ -5,6 +5,7 @@ import api, { bulkUpsert } from '../../api/client';
 import { calcIncomeTax } from '../../utils/taxCalc';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import { isActiveInPeriod } from '../../utils/employee';
 import { round2 } from '../../utils/round';
 import { useStore } from '../../stores/appStore';
@@ -392,7 +393,7 @@ const TaxMonthlyCalcPage: React.FC = () => {
         <Button icon={<LinkOutlined />} onClick={handleSync} disabled={locked}>同步到薪酬板块</Button>
         <Button icon={<DownloadOutlined />} onClick={() => exportXlsx(EXPORT_DEF, filteredRecords, period)}>导出</Button>
       </Space>
-      <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 2000, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 2000 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
 };

@@ -5,6 +5,7 @@ import api, { bulkUpsert } from '../../api/client';
 import { calcInternTax } from '../../utils/taxCalc';
 import { exportXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
+import FitHeightTable from '../../components/FitHeightTable';
 import { isActiveInPeriod } from '../../utils/employee';
 import { round2 } from '../../utils/round';
 import { useStore } from '../../stores/appStore';
@@ -254,7 +255,7 @@ const InternTaxPage: React.FC = () => {
       <div style={{ marginBottom: 12, color: '#888' }}>
         计算口径：本期应预扣预缴税额 =（累计收入额 − 累计减除费用）× 预扣率 − 速算扣除数 − 累计减免税额 − 累计已预扣预缴税额。
       </div>
-      <Table columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1800, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+      <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1800 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
 };
