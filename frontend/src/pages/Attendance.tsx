@@ -939,7 +939,7 @@ const AttendancePage: React.FC = () => {
             <Descriptions.Item label="病假扣款系数">{(calcResult.sick_deduct_rate * 100).toFixed(0)}%</Descriptions.Item>
             {calcResult.sick_rule_type === 'flat' && (
               <Descriptions.Item label="病假工资标准" span={2}>
-                生效日起按最低工资 × 支付系数计发（最低工资 {attRules.sick_flat_rule?.min_wage ?? 2740} × {Math.round((attRules.sick_flat_rule?.pay_rate ?? 0.8) * 100)}%）
+                最低工资{attRules.sick_flat_rule?.min_wage ?? 2740}*{Math.round((attRules.sick_flat_rule?.pay_rate ?? 0.8) * 100)}%
               </Descriptions.Item>
             )}
 
