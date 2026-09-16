@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Table, Card, Button, Space, Input, message, InputNumber, Upload, Popconfirm, Drawer, Tag, Descriptions, Select, DatePicker, Form, Dropdown, Modal, Progress,
 } from 'antd';
-import { SaveOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, PlusOutlined, SettingOutlined, SendOutlined, FileExcelOutlined, UnlockOutlined } from '@ant-design/icons';
+import { SaveOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, PlusOutlined, SettingOutlined, SendOutlined, FileExcelOutlined, UnlockOutlined, SyncOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api, { bulkUpsert } from '../api/client';
 import { recalcAllTaxes } from '../utils/taxRecalc';
@@ -13,6 +13,7 @@ import { withSource } from '../components/SourceTag';
 import { useHorizontalScroll } from '../utils/useHorizontalScroll';
 import { useStore } from '../stores/appStore';
 import { ensureRoster } from '../utils/roster';
+import { prevPeriod } from '../utils/format';
 import { canSubmit, canApprove } from '../utils/permissions';
 import { fetchApprovalStatus, getAttendanceGate } from '../utils/approvalStatus';
 import RawExcelModal from '../components/RawExcelModal';
@@ -301,6 +302,29 @@ const AttendancePage: React.FC = () => {
     message.success(`计算完成：${rows.length} / ${records.length} 条`);
     setCalcProgress({ done: 0, total: 0, active: false, label: '' });
     loadData();
+  };
+
+  // 同步上月考勤配置（考勤工资/是否参与考勤/计薪天数/工龄起算日）
+  const handleSyncPrevMonth = async () => {
+    if (attendanceLocked || attendanceSubmitted) { message.warning('该月考勤已冻结/已提交审批，不能同步'); return; }
+    const prev = prevPeriod(period);
+    try {
+      await ensureRoster(period);
+      const prevRes = await api.get(
+        `/attendance_records?select=unique_hash,attendance_wage,is_attendance,pay_days,seniority_start_date&period=eq.${prev}`);
+      const prevList: any[] = prevRes.data || [];
+      if (!prevList.length) { message.warning(`上月（${prev}）无考勤数据，无可同步`); return; }
+      const rows = prevList
+        .filter((r: any) => employees[r.unique_hash])   // 只同步本月花名册内的人，避免离职员工残留记录
+        .map((r: any) => ({
+          unique_hash: r.unique_hash, period,
+          attendance_wage: r.attendance_wage, is_attendance: r.is_attendance,
+          pay_days: r.pay_days, seniority_start_date: r.seniority_start_date,
+        }));
+      await bulkUpsert('attendance_records', rows);
+      message.success(`已同步上月（${prev}）考勤数据 ${rows.length} 条`);
+      loadData();
+    } catch { message.error('同步失败'); }
   };
 
   // 单条保存
@@ -815,6 +839,7 @@ const AttendancePage: React.FC = () => {
         <Space wrap>
           <span style={{ color: '#666' }}>{period} 考勤{attendanceLocked ? '（已锁定）' : attendanceSubmitted ? '（已提交审批）' : ''}</span>
           <Button type="primary" icon={<CalculatorOutlined />} onClick={handleAutoCalc} disabled={attendanceLocked || attendanceSubmitted}>自动计算</Button>
+          <Button icon={<SyncOutlined />} onClick={handleSyncPrevMonth} disabled={attendanceLocked || attendanceSubmitted}>同步上月数据</Button>
           <Button icon={<PlusOutlined />} onClick={openAdd} disabled={attendanceLocked || attendanceSubmitted}>添加记录</Button>
           <Dropdown menu={{
             items: [

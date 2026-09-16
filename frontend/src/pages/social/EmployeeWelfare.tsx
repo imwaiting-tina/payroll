@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Table, Button, Drawer, Form, Input, Select, Space, message, Card, InputNumber, Switch, Tag, Descriptions, DatePicker, Upload, Dropdown, Popconfirm, Progress,
 } from 'antd';
-import { PlusOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons';
 import api, { bulkUpsert } from '../../api/client';
 import { recalcAllTaxes } from '../../utils/taxRecalc';
 import type { SocialWelfareSet, HousingFundSet, EmployeeWelfareRecord } from '../../types';
@@ -14,6 +14,7 @@ import { DataStatusTag, anyLocked } from '../../components/DataStatusTag';
 import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
 import { isActiveInPeriod } from '../../utils/employee';
 import { round2 } from '../../utils/round';
+import { prevPeriod } from '../../utils/format';
 import dayjs from 'dayjs';
 import { useStore } from '../../stores/appStore';
 import { ensureRoster } from '../../utils/roster';
@@ -420,6 +421,29 @@ const EmployeeWelfare: React.FC = () => {
     loadData();
   };
 
+  // 同步上月福利配置（生效日期/结束日期/社保套/公积金套/社保基数/公积金基数）并重新计算
+  const handleSyncPrevMonth = async () => {
+    if (locked) { message.warning('该月已冻结，不能同步'); return; }
+    const prev = prevPeriod(period);
+    try {
+      const prevRes = await api.get(
+        `/employee_welfare_records?select=unique_hash,effective_month,expiry_month,social_welfare_code,housing_fund_code,social_base,housing_base&period=eq.${prev}`);
+      const prevList: any[] = prevRes.data || [];
+      if (!prevList.length) { message.warning(`上月（${prev}）无福利缴纳数据，无可同步`); return; }
+      await bulkUpsert('employee_welfare_records', prevList.map((r: any) => ({
+        unique_hash: r.unique_hash, period,
+        effective_month: r.effective_month, expiry_month: r.expiry_month,
+        social_welfare_code: r.social_welfare_code, housing_fund_code: r.housing_fund_code,
+        social_base: r.social_base, housing_base: r.housing_base,
+      })));
+      const merged = await loadData();
+      if (!merged) return;
+      await handleBatchCalc(merged);
+      await recalcAllTaxes(period);
+      message.success(`已同步上月（${prev}）福利配置并重新计算`);
+    } catch { message.error('同步失败'); }
+  };
+
   const handleSave = async () => {
     await form.validateFields();
     const values = formValues;
@@ -620,6 +644,7 @@ const EmployeeWelfare: React.FC = () => {
         <Space>
           <Button type="primary" icon={<PlusOutlined />} disabled={locked} onClick={openCreate}>添加记录</Button>
           <Button type="primary" icon={<CalculatorOutlined />} disabled={locked} onClick={() => handleBatchCalc()}>一键计算</Button>
+          <Button icon={<SyncOutlined />} disabled={locked} onClick={handleSyncPrevMonth}>同步上月数据</Button>
           <Dropdown menu={{
             items: [
               { key: 'template', label: '导出空白模板' },

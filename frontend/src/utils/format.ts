@@ -49,3 +49,10 @@ export function defaultPeriod(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/** 上一个月 'YYYY-MM' */
+export function prevPeriod(p: string): string {
+  const [y, m] = p.split('-').map(Number);
+  const prev = new Date(y, m - 2, 1);
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+}
