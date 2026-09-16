@@ -421,13 +421,13 @@ const EmployeeWelfare: React.FC = () => {
     loadData();
   };
 
-  // 同步上月福利配置（生效日期/结束日期/社保套/公积金套/社保基数/公积金基数）并重新计算
+  // 同步上月福利配置（生效/结束日期、社保/公积金套、社保/公积金基数、补充公积金基数、不缴纳原因）并重新计算
   const handleSyncPrevMonth = async () => {
     if (locked) { message.warning('该月已冻结，不能同步'); return; }
     const prev = prevPeriod(period);
     try {
       const prevRes = await api.get(
-        `/employee_welfare_records?select=unique_hash,effective_month,expiry_month,social_welfare_code,housing_fund_code,social_base,housing_base&period=eq.${prev}`);
+        `/employee_welfare_records?select=unique_hash,effective_month,expiry_month,social_welfare_code,housing_fund_code,social_base,housing_base,supp_enabled,supp_base,social_no_reason,housing_no_reason&period=eq.${prev}`);
       const prevList: any[] = prevRes.data || [];
       if (!prevList.length) { message.warning(`上月（${prev}）无福利缴纳数据，无可同步`); return; }
       await bulkUpsert('employee_welfare_records', prevList.map((r: any) => ({
@@ -435,6 +435,7 @@ const EmployeeWelfare: React.FC = () => {
         effective_month: r.effective_month, expiry_month: r.expiry_month,
         social_welfare_code: r.social_welfare_code, housing_fund_code: r.housing_fund_code,
         social_base: r.social_base, housing_base: r.housing_base,
+        supp_enabled: r.supp_enabled, supp_base: r.supp_base, social_no_reason: r.social_no_reason, housing_no_reason: r.housing_no_reason,
       })));
       const merged = await loadData();
       if (!merged) return;
