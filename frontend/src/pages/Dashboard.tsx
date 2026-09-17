@@ -383,14 +383,14 @@ const Dashboard: React.FC = () => {
       // 保存原始数据，供切 Tab 时按维度重算（不重新请求）
       setSummaryRaw({ activeEmps, salList, empMap, addMap, welfareMap, attMap });
 
-      // ===== 花名册变动（对比上月花名册与本月花名册，实时更新，无需等数据冻结） =====
+      // ===== 花名册变动（识别各月花名册的入职/离职日期，同步到入职日期/离职日期列） =====
       const prevActiveEmps = prevEmpList.filter((e: any) => isActiveInPeriod(e, prev));
-      const prevKeys = new Set(prevActiveEmps.map((e: any) => e.unique_hash));
-      const curKeys = new Set(activeEmps.map((e: any) => e.unique_hash));
-      // 新增 = 本月在册、上月不在册（本月入职）
-      const additions = activeEmps.filter((e: any) => !prevKeys.has(e.unique_hash)).map((e: any) => ({ key: e.unique_hash, name: e.name, pay_company: e.pay_company || '', department: e.department || '', date: e.entry_date, cost_center: e.cost_center || '' }));
-      // 减少 = 上月有、本月没有（上月离职，本月已不在册）
-      const removals = prevActiveEmps.filter((e: any) => !curKeys.has(e.unique_hash)).map((e: any) => ({ key: e.unique_hash, name: e.name, pay_company: e.pay_company || '', department: e.department || '', date: e.leave_date, cost_center: e.cost_center || '' }));
+      const fmtDate = (d: any) => (d ? String(d).slice(0, 10) : '');
+      const inMonth = (d: any) => d && String(d).slice(0, 7) === period;
+      // 新增 = 本月入职（entry_date 落在本月）
+      const additions = activeEmps.filter((e: any) => inMonth(e.entry_date)).map((e: any) => ({ key: e.unique_hash, name: e.name, pay_company: e.pay_company || '', department: e.department || '', date: fmtDate(e.entry_date), cost_center: e.cost_center || '' }));
+      // 减少 = 本月离职（leave_date 落在本月）
+      const removals = activeEmps.filter((e: any) => inMonth(e.leave_date)).map((e: any) => ({ key: e.unique_hash, name: e.name, pay_company: e.pay_company || '', department: e.department || '', date: fmtDate(e.leave_date), cost_center: e.cost_center || '' }));
       const prevActiveCount = prevActiveEmps.length;
       setRosterChanges({ additions, removals, prevActiveCount });
     } catch { message.error('加载数据总览失败'); }
