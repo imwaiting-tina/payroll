@@ -12,6 +12,7 @@ export interface SummaryRow {
   group: string;
   count: number;
   net: number;
+  tax: number;
   company_welfare: number;
   personal_welfare: number;
   perf_comm: number;
@@ -28,7 +29,7 @@ const money = (v: number): string => {
 
 /** 生成一张汇总表 HTML（用于渲染成图片） */
 function buildTableHtml(title: string, subtitle: string, groupLabel: string, rows: SummaryRow[]): string {
-  const columns = [groupLabel, '人数', '实收工资', '公司福利', '个人福利', '绩效&佣金', '考勤调整', '商保金额', '预提福利费', '人力成本总计'];
+  const columns = [groupLabel, '人数', '实收工资', '个税', '公司福利', '个人福利', '绩效&佣金', '考勤调整', '商保金额', '预提福利费', '人力成本总计'];
   const sum = (key: keyof SummaryRow) => rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
 
   const headCells = columns.map(c => `<th>${c}</th>`).join('');
@@ -38,6 +39,7 @@ function buildTableHtml(title: string, subtitle: string, groupLabel: string, row
       <td class="left">${r.group}</td>
       <td class="center">${r.count || 0}</td>
       <td class="right">${money(r.net)}</td>
+      <td class="right">${money(r.tax)}</td>
       <td class="right">${money(r.company_welfare)}</td>
       <td class="right">${money(r.personal_welfare)}</td>
       <td class="right">${money(r.perf_comm)}</td>
@@ -52,6 +54,7 @@ function buildTableHtml(title: string, subtitle: string, groupLabel: string, row
       <td class="left">合计</td>
       <td class="center">${sum('count')}</td>
       <td class="right">${money(sum('net'))}</td>
+      <td class="right">${money(sum('tax'))}</td>
       <td class="right">${money(sum('company_welfare'))}</td>
       <td class="right">${money(sum('personal_welfare'))}</td>
       <td class="right">${money(sum('perf_comm'))}</td>

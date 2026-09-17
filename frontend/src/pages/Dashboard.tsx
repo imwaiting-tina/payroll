@@ -401,16 +401,17 @@ const Dashboard: React.FC = () => {
     const byGroup: Record<string, any> = {};
     activeEmps.forEach((e: any) => {
       const g = e[groupKey] || '未知';
-      if (!byGroup[g]) byGroup[g] = { group: g, count: 0, net: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
+      if (!byGroup[g]) byGroup[g] = { group: g, count: 0, net: 0, tax: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
       byGroup[g].count++;
     });
     salList.forEach((r: any) => {
       const emp = empMap[r.unique_hash];
       if (!emp) return;
       const g = emp[groupKey] || '未知';
-      if (!byGroup[g]) byGroup[g] = { group: g, count: 0, net: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
+      if (!byGroup[g]) byGroup[g] = { group: g, count: 0, net: 0, tax: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
       const add = addMap[r.unique_hash] || {};
       byGroup[g].net += Number(r.net_pay || 0);
+      byGroup[g].tax += Number(r.monthly_tax || 0);
       byGroup[g].company_welfare += Number(r.company_welfare_total || 0);
       byGroup[g].personal_welfare += Number(r.personal_welfare_total || 0);
       byGroup[g].perf_comm += perfCommLocal(add);
@@ -684,6 +685,7 @@ const Dashboard: React.FC = () => {
     { title: summaryTab === 'company' ? '发薪公司' : '成本中心', dataIndex: 'group', key: 'group', fixed: 'left' as const, width: 150, ellipsis: true },
     { title: '人数', dataIndex: 'count', key: 'count', width: 70 },
     { title: '实收工资', dataIndex: 'net', key: 'net', width: 120, render: (v: number) => fmtMoney(v) },
+    { title: '个税', dataIndex: 'tax', key: 'tax', width: 100, render: (v: number) => fmtMoney(v) },
     { title: '公司福利', dataIndex: 'company_welfare', key: 'cw', width: 110, render: (v: number) => fmtMoney(v) },
     { title: '个人福利', dataIndex: 'personal_welfare', key: 'pw', width: 110, render: (v: number) => fmtMoney(v) },
     { title: '绩效&佣金', dataIndex: 'perf_comm', key: 'pc', width: 110, render: (v: number) => fmtMoney(v) },
@@ -707,6 +709,7 @@ const Dashboard: React.FC = () => {
       { key: 'group', label: summaryTab === 'company' ? '发薪公司' : '成本中心' },
       { key: 'count', label: '人数' },
       { key: 'net', label: '实收工资' },
+      { key: 'tax', label: '个税' },
       { key: 'company_welfare', label: '公司福利' },
       { key: 'personal_welfare', label: '个人福利' },
       { key: 'perf_comm', label: '绩效&佣金' },
@@ -905,13 +908,14 @@ const Dashboard: React.FC = () => {
                   <Table.Summary.Cell index={0}><strong>合计</strong></Table.Summary.Cell>
                   <Table.Summary.Cell index={1}><strong>{total('count')}</strong></Table.Summary.Cell>
                   <Table.Summary.Cell index={2}><strong>{fmtMoney(total('net'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={3}><strong>{fmtMoney(total('company_welfare'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={4}><strong>{fmtMoney(total('personal_welfare'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={5}><strong>{fmtMoney(total('perf_comm'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={6}><strong>{fmtMoney(total('attendance_adjust'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={7}><strong>{fmtMoney(total('insurance'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={8}><strong>{fmtMoney(total('provision'))}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={9}><strong>{fmtMoney(total('total_cost'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={3}><strong>{fmtMoney(total('tax'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={4}><strong>{fmtMoney(total('company_welfare'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={5}><strong>{fmtMoney(total('personal_welfare'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={6}><strong>{fmtMoney(total('perf_comm'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={7}><strong>{fmtMoney(total('attendance_adjust'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={8}><strong>{fmtMoney(total('insurance'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={9}><strong>{fmtMoney(total('provision'))}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={10}><strong>{fmtMoney(total('total_cost'))}</strong></Table.Summary.Cell>
                 </Table.Summary.Row>
               );
             }}

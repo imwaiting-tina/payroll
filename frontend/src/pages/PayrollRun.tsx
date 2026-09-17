@@ -529,16 +529,17 @@ const PayrollPage: React.FC = () => {
         const by: Record<string, SummaryRow> = {};
         activeEmps.forEach((e: any) => {
           const g = e[key] || '未知';
-          if (!by[g]) by[g] = { group: g, count: 0, net: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
+          if (!by[g]) by[g] = { group: g, count: 0, net: 0, tax: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
           by[g].count++;
         });
         salList.forEach((r: any) => {
           const emp = empMap[r.unique_hash];
           if (!emp) return;
           const g = emp[key] || '未知';
-          if (!by[g]) by[g] = { group: g, count: 0, net: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
+          if (!by[g]) by[g] = { group: g, count: 0, net: 0, tax: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
           const add = addMap[r.unique_hash] || {};
           by[g].net += Number(r.net_pay || 0);
+          by[g].tax += Number(r.monthly_tax || 0);
           by[g].company_welfare += Number(r.company_welfare_total || 0);
           by[g].personal_welfare += Number(r.personal_welfare_total || 0);
           by[g].perf_comm += perfComm(add);
