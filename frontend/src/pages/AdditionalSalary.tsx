@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Card, Button, Space, Input, Select, message, Upload, Typography, Progress } from 'antd';
+import { Table, Card, Button, Space, Input, Select, message, Upload, Collapse, Progress } from 'antd';
 import { DownloadOutlined, UploadOutlined, SearchOutlined } from '@ant-design/icons';
 import api, { bulkUpsert } from '../api/client';
 import { recalcAllTaxes } from '../utils/taxRecalc';
@@ -265,21 +265,27 @@ const AdditionalSalaryPage: React.FC = () => {
       </Card>
 
       <div ref={scrollRef} onWheel={onWheel}>
-        <FitHeightTable columns={columns} dataSource={records} loading={loading} scroll={{ x: 2200 }} extraBottom={250} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+        <FitHeightTable columns={columns} dataSource={records} loading={loading} scroll={{ x: 2200 }} extraBottom={64} size="small" pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
       </div>
 
-      {/* 字段注释（列表下方） */}
-      <Card size="small" style={{ marginTop: 12 }}>
-        <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>字段注释</Typography.Title>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 24px', fontSize: 13 }}>
-          {FIELD_NOTES.map(([field, note]) => (
-            <div key={field} style={{ display: 'flex', gap: 8 }}>
-              <span style={{ color: '#333', whiteSpace: 'nowrap', fontWeight: 500 }}>{field}：</span>
-              <span style={{ color: '#888' }}>{note}</span>
+      {/* 字段注释（列表下方，默认折叠，点击展开） */}
+      <Collapse
+        style={{ marginTop: 12 }}
+        items={[{
+          key: 'field-notes',
+          label: '字段注释',
+          children: (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 24px', fontSize: 13 }}>
+              {FIELD_NOTES.map(([field, note]) => (
+                <div key={field} style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ color: '#333', whiteSpace: 'nowrap', fontWeight: 500 }}>{field}：</span>
+                  <span style={{ color: '#888' }}>{note}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </Card>
+          ),
+        }]}
+      />
     </div>
   );
 };
