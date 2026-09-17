@@ -388,9 +388,9 @@ const Dashboard: React.FC = () => {
       const prevKeys = new Set(prevActiveEmps.map((e: any) => e.unique_hash));
       const curKeys = new Set(activeEmps.map((e: any) => e.unique_hash));
       // 新增 = 本月在册、上月不在册（本月入职）
-      const additions = activeEmps.filter((e: any) => !prevKeys.has(e.unique_hash)).map((e: any) => ({ key: e.unique_hash, name: e.name, department: e.department || '', date: e.entry_date, cost_center: e.cost_center || '' }));
+      const additions = activeEmps.filter((e: any) => !prevKeys.has(e.unique_hash)).map((e: any) => ({ key: e.unique_hash, name: e.name, pay_company: e.pay_company || '', department: e.department || '', date: e.entry_date, cost_center: e.cost_center || '' }));
       // 减少 = 上月有、本月没有（上月离职，本月已不在册）
-      const removals = prevActiveEmps.filter((e: any) => !curKeys.has(e.unique_hash)).map((e: any) => ({ key: e.unique_hash, name: e.name, department: e.department || '', date: e.leave_date, cost_center: e.cost_center || '' }));
+      const removals = prevActiveEmps.filter((e: any) => !curKeys.has(e.unique_hash)).map((e: any) => ({ key: e.unique_hash, name: e.name, pay_company: e.pay_company || '', department: e.department || '', date: e.leave_date, cost_center: e.cost_center || '' }));
       const prevActiveCount = prevActiveEmps.length;
       setRosterChanges({ additions, removals, prevActiveCount });
     } catch { message.error('加载数据总览失败'); }
@@ -701,6 +701,7 @@ const Dashboard: React.FC = () => {
   ];
 
   const changeColumns = (dateLabel: string) => [
+    { title: '发薪公司', dataIndex: 'pay_company', width: 150, ellipsis: true },
     { title: '姓名', dataIndex: 'name', width: 80 },
     { title: '部门', dataIndex: 'department', width: 100 },
     { title: '成本中心', dataIndex: 'cost_center', width: 110 },
