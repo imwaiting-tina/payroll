@@ -5,7 +5,7 @@ import {
 import { PlusOutlined, SearchOutlined, DownloadOutlined, UploadOutlined, SendOutlined, SyncOutlined, UnlockOutlined } from '@ant-design/icons';
 import type { Employee, CompanyMapping } from '../types';
 import dayjs, { Dayjs } from 'dayjs';
-import { exportXlsx, importXlsx, type ExportDef } from '../utils/importExport';
+import { exportXlsx, importXlsx, normalizeDateToIso, type ExportDef } from '../utils/importExport';
 import { genUniqueHash } from '../utils/hash';
 import { withSource } from '../components/SourceTag';
 import FitHeightTable from '../components/FitHeightTable';
@@ -276,12 +276,21 @@ const EmployeesPage: React.FC = () => {
       const failReasons: string[] = [];
       const rows: any[] = [];
       const rowKeys: string[] = [];
+      const seenUniqueHashes = new Set<string>();
       // 开始导入，显示进度
       setImportProgress({ done: 0, total: data.length, importing: true });
 
       // 第一步：纯本地校验/归一化，收集要写入的行（不再逐行查库）
       for (const row of data) {
         try {
+          // 0. 姓名必填校验（name 列 NOT NULL，空名会导致整批写入 400）
+          const rawName = String(row.name || '').trim();
+          if (!rawName) {
+            failed++;
+            failReasons.push('（存在姓名为空的行，已跳过）');
+            continue;
+          }
+
           // 1. 发薪公司归一化：全称→简称
           const rawCompany = String(row.pay_company || '').trim();
           let shortName = rawCompany;
@@ -321,28 +330,36 @@ const EmployeesPage: React.FC = () => {
             ? String(row.status).trim()
             : '在职';
 
-          // 6. 日期归一化
-          const entryDate = row.entry_date ? String(row.entry_date).slice(0, 10) : '';
-          const leaveDate = row.leave_date ? String(row.leave_date).slice(0, 10) : null;
+          // 6. 日期归一化（统一为 YYYY-MM-DD，无法识别视为缺失）
+          const entryDate = normalizeDateToIso(row.entry_date);
+          const leaveDate = normalizeDateToIso(row.leave_date);
           if (!entryDate) {
             failed++;
-            failReasons.push(`${row.name || '?'}（缺入职日期）`);
+            failReasons.push(`${rawName}（入职日期缺失或格式无法识别）`);
             continue;
           }
 
           // 7. 唯一值：以公式算出的为准。Excel里那一格要么为空（交给系统现算），
           //    要么等于公式算出的值；只要不一致（手填了旧值/错值）→ 拒绝导入。
-          const calculatedHash = await genUniqueHash(row.name, shortName, entryDate);
+          const calculatedHash = await genUniqueHash(rawName, shortName, entryDate);
           const importHash = row.unique_hash ? String(row.unique_hash).trim() : '';
           if (importHash !== '' && importHash !== calculatedHash) {
             failed++;
-            failReasons.push(`${row.name || '?'}（唯一值与姓名+发薪公司+入职日期不符，请勿手动填写）`);
+            failReasons.push(`${rawName}（唯一值与姓名+发薪公司+入职日期不符，请勿手动填写）`);
             continue;
           }
           const uniqueHash = calculatedHash;
 
+          // 同批去重：同一唯一值只保留首次出现（避免 ON CONFLICT 同批冲突导致 400）
+          if (seenUniqueHashes.has(uniqueHash)) {
+            failed++;
+            failReasons.push(`${rawName}（与前面行唯一值重复，已跳过）`);
+            continue;
+          }
+          seenUniqueHashes.add(uniqueHash);
+
           rows.push({
-            name: row.name,
+            name: rawName,
             status,
             cost_center: row.cost_center,
             pay_company: shortName,
@@ -385,7 +402,13 @@ const EmployeesPage: React.FC = () => {
       message.info(`导入完成：${parts.join('，')}${failReasons.length ? '。' + failReasons.slice(0, 5).join('；') : ''}`);
       loadEmployees();
     } catch (e: any) {
-      message.error(e.message || '导入失败');
+      // PostgREST 的 400 具体原因在 response.data.message（如列不存在/日期格式错误/NOT NULL 等），
+      // 直接暴露出来，避免只看到笼统的 "Request failed with status code 400"。
+      const detail = e?.response?.data?.message
+        || (e?.response?.data?.details ? `详情：${e.response.data.details}` : '')
+        || e?.message
+        || '导入失败';
+      message.error(detail);
     } finally {
       // 结束导入
       setImportProgress({ done: 0, total: 0, importing: false });

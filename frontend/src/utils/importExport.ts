@@ -93,6 +93,41 @@ function cleanNumberString(val: any): any {
 }
 
 /**
+ * 把任意常见日期表示统一成严格的 YYYY-MM-DD，无法识别时返回 null。
+ * 覆盖：Date 对象、Excel 序列号、YYYY/MM/DD、YYYY-MM-DD（含无补零）、YYYYMMDD、M/D/YYYY。
+ */
+export function normalizeDateToIso(val: any): string | null {
+  if (val === undefined || val === null || val === '') return null;
+  // Date 对象
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  // Excel 日期序列号（5 位数字，约 40000~60000）
+  if (typeof val === 'number' && val >= 40000 && val <= 60000) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.round(val) * 86400000);
+    return date.toISOString().slice(0, 10);
+  }
+  const s = String(val).trim();
+  if (!s) return null;
+  // YYYY-MM-DD（可带时间；月/日无补零也能识别）
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  // YYYY/M/D
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  // YYYYMMDD
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  // M/D/YYYY（无年份在前的写法，按美式月/日/年）
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return null;
+}
+
+/**
  * 导入 XLSX 文件，返回解析后的数据。
  * 自动匹配表头文字 → key，日期单元格自动转成 YYYY-MM-DD。
  *
