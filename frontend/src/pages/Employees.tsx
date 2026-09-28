@@ -361,18 +361,20 @@ const EmployeesPage: React.FC = () => {
           rows.push({
             name: rawName,
             status,
-            cost_center: row.cost_center,
+            cost_center: row.cost_center ?? null,
             pay_company: shortName,
             tax_method: taxMethod,
-            department: row.department,
-            report_to: row.report_to,
-            position: row.position,
-            job_level: jobLevel,
+            department: row.department ?? null,
+            report_to: row.report_to ?? null,
+            position: row.position ?? null,
+            job_level: jobLevel ?? null,
             attendance_type: attType,
-            basic_salary: row.basic_salary !== undefined && row.basic_salary !== '' ? Number(row.basic_salary) : undefined,
-            provision_welfare: row.provision_welfare !== undefined && row.provision_welfare !== '' ? Number(row.provision_welfare) : undefined,
+            // 空值统一用 null（而不是 undefined），否则 JSON.stringify 会丢弃该键，
+            // 导致批量 POST 里各行键不一致，PostgREST 报 "All object keys must match"
+            basic_salary: row.basic_salary !== undefined && row.basic_salary !== '' ? Number(row.basic_salary) : null,
+            provision_welfare: row.provision_welfare !== undefined && row.provision_welfare !== '' ? Number(row.provision_welfare) : null,
             entry_date: entryDate,
-            leave_date: leaveDate,
+            leave_date: leaveDate ?? null,
             unique_hash: uniqueHash,
             period,   // 写入当前月
           });
