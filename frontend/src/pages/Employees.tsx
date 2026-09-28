@@ -274,9 +274,7 @@ const EmployeesPage: React.FC = () => {
 
       let failed = 0;
       const failReasons: string[] = [];
-      const warnings: string[] = [];
       const rows: any[] = [];
-      const rowKeys: string[] = [];
       const seenUniqueHashes = new Set<string>();
       // 开始导入，显示进度
       setImportProgress({ done: 0, total: data.length, importing: true });
@@ -340,15 +338,11 @@ const EmployeesPage: React.FC = () => {
             continue;
           }
 
-          // 7. 唯一值：始终以公式（姓名+发薪公司+入职日期）现算为准。Excel 里的
-          //    唯一值仅作校验提示；不一致说明源数据（姓名/公司/入职日期）有过变更，
-          //    按最新数据重算后继续导入，不再拒绝（避免「某个人的行总是导入失败」）。
-          const calculatedHash = await genUniqueHash(rawName, shortName, entryDate);
+          // 7. 唯一值：身份以「发薪公司+姓名+入职日期」识别，唯一值只是这条身份的
+          //    技术键。导出的唯一值保持不变（身份稳定），只有缺唯一值的新员工才现算。
+          //    绝不在导入时重算/覆盖，否则同一人会被当成两条数据重复导入。
           const importHash = row.unique_hash ? String(row.unique_hash).trim() : '';
-          if (importHash !== '' && importHash !== calculatedHash) {
-            warnings.push(`${rawName}（唯一值已按最新姓名/公司/入职日期重算）`);
-          }
-          const uniqueHash = calculatedHash;
+          const uniqueHash = importHash || (await genUniqueHash(rawName, shortName, entryDate));
 
           // 同批去重：同一唯一值只保留首次出现（避免 ON CONFLICT 同批冲突导致 400）
           if (seenUniqueHashes.has(uniqueHash)) {
@@ -378,7 +372,6 @@ const EmployeesPage: React.FC = () => {
             unique_hash: uniqueHash,
             period,   // 写入当前月
           });
-          rowKeys.push(uniqueHash);
         } catch {
           failed++;
         }
@@ -386,13 +379,27 @@ const EmployeesPage: React.FC = () => {
         setImportProgress((p) => ({ ...p, done: p.done + 1 }));
       }
 
-      // 第二步：一次查库拿当月已存在的唯一值 → 区分新增/更新，再一次批量 upsert 落库
+      // 第二步：按「发薪公司 + 姓名 + 入职日期」识别同一人（唯一值只是这条身份的技术键）。
+      // 查当月已存在的花名册，按身份匹配：匹配到的行沿用库里已有的唯一值（身份稳定、绝不重算），
+      // 匹配不到的新员工才用现算值。这样即使历史唯一值算法有差异，同一人也不会被拆成两条。
       let added = 0, updated = 0;
       if (rows.length > 0) {
-        const existingRes = await api.get(`/employees?select=unique_hash&period=eq.${period}`);
+        const existingRes = await api.get(`/employees?select=unique_hash,name,pay_company,entry_date&period=eq.${period}`);
+        const identityMap = new Map<string, string>();
+        for (const r of existingRes.data) {
+          const key = `${r.name}|${r.pay_company}|${r.entry_date}`;
+          if (!identityMap.has(key)) identityMap.set(key, r.unique_hash);
+        }
+        const finalKeys: string[] = [];
+        for (const row of rows) {
+          const key = `${row.name}|${row.pay_company}|${row.entry_date}`;
+          const existingHash = identityMap.get(key);
+          if (existingHash) row.unique_hash = existingHash;
+          finalKeys.push(row.unique_hash);
+        }
         const existingSet = new Set(existingRes.data.map((r: any) => r.unique_hash));
-        updated = rowKeys.filter((k) => existingSet.has(k)).length;
-        added = rowKeys.length - updated;
+        updated = finalKeys.filter((k) => existingSet.has(k)).length;
+        added = finalKeys.length - updated;
         await bulkUpsert('employees', rows);
         await recalcAllTaxes(period); // 花名册导入后自动触发下游个税计算
       }
@@ -401,11 +408,7 @@ const EmployeesPage: React.FC = () => {
       if (added > 0) parts.push(`新增 ${added} 人`);
       if (updated > 0) parts.push(`更新 ${updated} 人`);
       if (failed > 0) parts.push(`失败 ${failed} 人`);
-      const detail = [
-        ...failReasons.slice(0, 10),
-        ...warnings.slice(0, 10),
-      ].join('；');
-      message.info(`导入完成：${parts.join('，')}${detail ? '。' + detail : ''}`);
+      message.info(`导入完成：${parts.join('，')}${failReasons.length ? '。' + failReasons.slice(0, 10).join('；') : ''}`);
       loadEmployees();
     } catch (e: any) {
       // PostgREST 的 400 具体原因在 response.data.message（如列不存在/日期格式错误/NOT NULL 等），
