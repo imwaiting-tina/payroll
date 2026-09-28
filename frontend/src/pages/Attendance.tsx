@@ -177,8 +177,8 @@ const AttendancePage: React.FC = () => {
               on_off_adjust: 0, attendance_adjust_total: 0, data_status: '未录入',
             }),
             key: rec?.id ?? `emp-${e.unique_hash}`,
-            // 基本工资优先取考勤记录，否则取花名册（仅供展示，不参与计算）
-            basic_salary: rec?.basic_salary ?? e.basic_salary ?? undefined,
+            // 基本工资取花名册（仅供展示，不参与计算；计算用考勤工资 attendance_wage）
+            basic_salary: e.basic_salary ?? rec?.basic_salary ?? undefined,
             // 以下必须在考勤记录展开之后再赋值，避免被记录里的空值覆盖成横杠
             // 考勤工资来自考勤记录导入
             attendance_wage: rec?.attendance_wage ?? undefined,
