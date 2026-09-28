@@ -274,6 +274,7 @@ const EmployeesPage: React.FC = () => {
 
       let failed = 0;
       const failReasons: string[] = [];
+      const warnings: string[] = [];
       const rows: any[] = [];
       const rowKeys: string[] = [];
       const seenUniqueHashes = new Set<string>();
@@ -339,14 +340,13 @@ const EmployeesPage: React.FC = () => {
             continue;
           }
 
-          // 7. 唯一值：以公式算出的为准。Excel里那一格要么为空（交给系统现算），
-          //    要么等于公式算出的值；只要不一致（手填了旧值/错值）→ 拒绝导入。
+          // 7. 唯一值：始终以公式（姓名+发薪公司+入职日期）现算为准。Excel 里的
+          //    唯一值仅作校验提示；不一致说明源数据（姓名/公司/入职日期）有过变更，
+          //    按最新数据重算后继续导入，不再拒绝（避免「某个人的行总是导入失败」）。
           const calculatedHash = await genUniqueHash(rawName, shortName, entryDate);
           const importHash = row.unique_hash ? String(row.unique_hash).trim() : '';
           if (importHash !== '' && importHash !== calculatedHash) {
-            failed++;
-            failReasons.push(`${rawName}（唯一值与姓名+发薪公司+入职日期不符，请勿手动填写）`);
-            continue;
+            warnings.push(`${rawName}（唯一值已按最新姓名/公司/入职日期重算）`);
           }
           const uniqueHash = calculatedHash;
 
@@ -401,7 +401,11 @@ const EmployeesPage: React.FC = () => {
       if (added > 0) parts.push(`新增 ${added} 人`);
       if (updated > 0) parts.push(`更新 ${updated} 人`);
       if (failed > 0) parts.push(`失败 ${failed} 人`);
-      message.info(`导入完成：${parts.join('，')}${failReasons.length ? '。' + failReasons.slice(0, 5).join('；') : ''}`);
+      const detail = [
+        ...failReasons.slice(0, 10),
+        ...warnings.slice(0, 10),
+      ].join('；');
+      message.info(`导入完成：${parts.join('，')}${detail ? '。' + detail : ''}`);
       loadEmployees();
     } catch (e: any) {
       // PostgREST 的 400 具体原因在 response.data.message（如列不存在/日期格式错误/NOT NULL 等），
