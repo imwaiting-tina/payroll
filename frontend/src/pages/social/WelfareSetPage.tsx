@@ -223,7 +223,11 @@ const WelfareSetPage: React.FC = () => {
       message.info(`导入完成：新增 ${added}，更新 ${updated}，失败 ${failed}${failReasons.length ? '。' + failReasons.slice(0, 5).join('；') : ''}`);
       loadData();
     } catch (e: any) {
-      message.error(e.message || '导入失败');
+      const detail = e?.response?.data?.message
+        || (e?.response?.data?.details ? `详情：${e.response.data.details}` : '')
+        || e?.message
+        || '导入失败';
+      message.error(detail);
     } finally {
       setImportProgress({ done: 0, total: 0, importing: false });
     }

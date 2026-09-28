@@ -48,8 +48,18 @@ export async function bulkUpsert<T = any>(
   onConflict = 'unique_hash,period'
 ): Promise<void> {
   if (!rows || rows.length === 0) return;
-  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
-    const chunk = rows.slice(i, i + UPSERT_CHUNK);
+  // 统一把 undefined 转成 null：JSON.stringify 会丢弃 undefined 键，
+  // 导致同一批量里「这一行有某键、那一行没有」→ PostgREST 报 "All object keys must match"。
+  // 这里做一次兜底，保证所有行键一致且都可序列化。
+  const cleaned = rows.map((r) => {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(r as any)) {
+      out[k] = v === undefined ? null : v;
+    }
+    return out;
+  });
+  for (let i = 0; i < cleaned.length; i += UPSERT_CHUNK) {
+    const chunk = cleaned.slice(i, i + UPSERT_CHUNK);
     await api.post(`/${table}?on_conflict=${onConflict}`, chunk, {
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     });
