@@ -527,12 +527,15 @@ const PayrollPage: React.FC = () => {
 
       const buildRows = (key: 'pay_company' | 'department'): SummaryRow[] => {
         const by: Record<string, SummaryRow> = {};
+        const activeHashSet = new Set(activeEmps.map((e: any) => e.unique_hash));
         activeEmps.forEach((e: any) => {
           const g = e[key] || '未知';
           if (!by[g]) by[g] = { group: g, count: 0, net: 0, tax: 0, company_welfare: 0, personal_welfare: 0, perf_comm: 0, attendance_adjust: 0, insurance: 0, provision: 0, total_cost: 0 };
           by[g].count++;
         });
         salList.forEach((r: any) => {
+          // 只汇总本月在职员工，剔除已离职员工遗留薪资，避免「公司无人却仍计人力成本」
+          if (!activeHashSet.has(r.unique_hash)) return;
           const emp = empMap[r.unique_hash];
           if (!emp) return;
           const g = emp[key] || '未知';

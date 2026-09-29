@@ -214,6 +214,11 @@ const Dashboard: React.FC = () => {
       const empList: any[] = empRes.data;
       const prevEmpList: any[] = empPrevRes.data;
       const activeEmps = empList.filter((e: any) => isActiveInPeriod(e, period));
+      const prevActiveEmps = prevEmpList.filter((e: any) => isActiveInPeriod(e, prev));
+      // 在职口径的唯一值集合：汇总时只统计「本月在职」的员工，剔除已离职员工遗留的
+      // 薪资记录，避免「公司已无人、却仍算出人力成本」。
+      const activeHashSet = new Set(activeEmps.map((e: any) => e.unique_hash));
+      const prevActiveHashSet = new Set(prevActiveEmps.map((e: any) => e.unique_hash));
       const empMap: Record<string, any> = {};
       empList.forEach((e: any) => { empMap[e.unique_hash] = e; });
 
@@ -225,6 +230,10 @@ const Dashboard: React.FC = () => {
       const salPrevList: any[] = salPrevRes.data;
       const salMap: Record<string, any> = {};
       salList.forEach((r: any) => { salMap[r.unique_hash] = r; });
+      // 只统计本月/上月「在职」员工的薪资记录，剔除已离职员工遗留数据，
+      // 保证图表、汇总、构成占比与核心指标口径一致。
+      const activeSalList = salList.filter((r: any) => activeHashSet.has(r.unique_hash));
+      const activePrevSalList = salPrevList.filter((r: any) => prevActiveHashSet.has(r.unique_hash));
 
       const [addRes, addPrevRes] = await Promise.all([
         api.get(`/additional_salary_records?select=*&period=eq.${period}`),
@@ -248,10 +257,11 @@ const Dashboard: React.FC = () => {
       const attPrevMap: Record<string, any> = {};
       attPrevRes.data.forEach((r: any) => { attPrevMap[r.unique_hash] = r; });
 
-      // ===== 核心指标（口径严格，与 Summary 一致：只统计花名册能匹配到的员工） =====
+      // ===== 核心指标（口径严格，与 Summary 一致：只统计本月在职的花名册员工） =====
       const sum = (arr: any[], key: string) => arr.reduce((s, r) => s + (Number(r[key]) || 0), 0);
-      // 过滤掉花名册里找不到的孤儿薪资记录，与 Summary 分公司汇总保持一致
-      const matchedSalList = salList.filter((r: any) => empMap[r.unique_hash]);
+      // 过滤掉：①花名册里找不到的孤儿薪资记录；②已离职员工遗留的薪资记录，
+      // 与 Summary 分公司汇总保持一致，避免「公司已无人却仍计算人力成本」。
+      const matchedSalList = salList.filter((r: any) => activeHashSet.has(r.unique_hash));
       const totalWageSubtotal = round2(sum(matchedSalList, 'wage_subtotal'));   // 应发工资总计
       const totalPersonalWelfare = round2(sum(matchedSalList, 'personal_welfare_total')); // 社保公积金扣除
       const totalTax = round2(sum(matchedSalList, 'monthly_tax'));               // 个税总计
@@ -271,8 +281,8 @@ const Dashboard: React.FC = () => {
         avg_net: avgNet,
       });
 
-      // 上月核心指标（环比用）
-      const matchedPrevSalList = salPrevList.filter((r: any) => empMap[r.unique_hash]);
+      // 上月核心指标（环比用，按上月在职口径过滤）
+      const matchedPrevSalList = salPrevList.filter((r: any) => prevActiveHashSet.has(r.unique_hash));
       const prevWageSubtotal = round2(sum(matchedPrevSalList, 'wage_subtotal'));
       const prevPersonalWelfare = round2(sum(matchedPrevSalList, 'personal_welfare_total'));
       const prevTax = round2(sum(matchedPrevSalList, 'monthly_tax'));
@@ -296,7 +306,7 @@ const Dashboard: React.FC = () => {
       // ===== 图表1：各部门薪资分布（分组柱） =====
       const buildGroup = (groupKey: 'department' | 'cost_center') => {
         const byGroup: Record<string, { gross: number; net: number; count: number; deduct: number; netList: number[] }> = {};
-        salList.forEach((r: any) => {
+        activeSalList.forEach((r: any) => {
           const emp = empMap[r.unique_hash];
           if (!emp) return;
           const g = emp[groupKey] || '未分配';
@@ -320,7 +330,7 @@ const Dashboard: React.FC = () => {
       setGroupData({ dept: buildGroup('department'), cost: buildGroup('cost_center') });
 
       // ===== 图表2：薪资区间人数分布（按实发） =====
-      const netVals: number[] = salList.map((r: any) => Number(r.net_pay || 0)).filter(x => x > 0);
+      const netVals: number[] = activeSalList.map((r: any) => Number(r.net_pay || 0)).filter(x => x > 0);
       setSalaryMedian(round2(median(netVals)));
       setSalaryDist(buildBins(netVals));
 
@@ -328,7 +338,7 @@ const Dashboard: React.FC = () => {
       const companyAvg = round2(totalNetPay / salEmpCount);
       setCompanyAvgNet(companyAvg);
       const netByDept: Record<string, { sum: number; count: number; list: number[] }> = {};
-      salList.forEach((r: any) => {
+      activeSalList.forEach((r: any) => {
         const emp = empMap[r.unique_hash];
         if (!emp) return;
         const dept = emp.department || '未分配';
@@ -365,8 +375,8 @@ const Dashboard: React.FC = () => {
         });
         return c;
       };
-      const compCur = calcComp(salList, addMap, attMap);
-      const compPrev = calcComp(salPrevList, addPrevMap, attPrevMap);
+      const compCur = calcComp(activeSalList, addMap, attMap);
+      const compPrev = calcComp(activePrevSalList, addPrevMap, attPrevMap);
       const colorMap: Record<string, string> = { '基本工资': paletteColor(0), '绩效&佣金': paletteColor(4), '津贴补贴': paletteColor(2), '加班费': paletteColor(7), '其他': paletteColor(8) };
       const order = ['基本工资', '绩效&佣金', '津贴补贴', '加班费', '其他'];
       const totalComp = order.reduce((s, k) => s + compCur[k], 0) || 1;
@@ -384,7 +394,6 @@ const Dashboard: React.FC = () => {
       setSummaryRaw({ activeEmps, salList, empMap, addMap, welfareMap, attMap });
 
       // ===== 花名册变动（对比上月花名册与本月花名册；含本月补录上月离职的情况） =====
-      const prevActiveEmps = prevEmpList.filter((e: any) => isActiveInPeriod(e, prev));
       const prevKeys = new Set(prevActiveEmps.map((e: any) => e.unique_hash));
       const curKeys = new Set(activeEmps.map((e: any) => e.unique_hash));
       const fmtDate = (d: any) => (d ? String(d).slice(0, 10) : '');
@@ -408,6 +417,9 @@ const Dashboard: React.FC = () => {
 
   const buildSummaryByGroup = (groupKey: 'pay_company' | 'cost_center' | 'department') => {
     const { activeEmps, salList, empMap, addMap, welfareMap, attMap } = summaryRaw;
+    // 只汇总本月在职员工：①避免已离职员工遗留薪资被计入；②与「薪资计算」板块
+    // 的员工口径一致（公司无人则不计人力成本）。
+    const activeHashSet = new Set(activeEmps.map((e: any) => e.unique_hash));
     const byGroup: Record<string, any> = {};
     activeEmps.forEach((e: any) => {
       const g = e[groupKey] || '未知';
@@ -415,6 +427,7 @@ const Dashboard: React.FC = () => {
       byGroup[g].count++;
     });
     salList.forEach((r: any) => {
+      if (!activeHashSet.has(r.unique_hash)) return;
       const emp = empMap[r.unique_hash];
       if (!emp) return;
       const g = emp[groupKey] || '未知';
