@@ -194,7 +194,13 @@ const AdditionalSalaryPage: React.FC = () => {
       }
       loadData();
     } catch (e: any) {
-      message.error(e.message || '导入失败');
+      // PostgREST 400 的具体原因在 response.data.message（如列不存在/键不一致/值非法等），
+      // 直接暴露出来，避免只看到笼统的 "Request failed with status code 400"。
+      const detail = e?.response?.data?.message
+        || (e?.response?.data?.details ? `详情：${e.response.data.details}` : '')
+        || e?.message
+        || '导入失败';
+      message.error(detail);
     } finally {
       setImportProgress({ done: 0, total: 0, importing: false });
     }
