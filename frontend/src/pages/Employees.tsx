@@ -52,7 +52,8 @@ const EXPORT_DEF: ExportDef = {
     { key: 'status', label: '状态' },
     { key: 'cost_center', label: '成本中心' },
     { key: 'pay_company', label: '发薪公司', required: true },
-    { key: 'tax_method', label: '计税方式' },
+    // 导出转中文（导入侧 TAX_LABEL_TO_VALUE 中英文都认，导出后可直接再导入）
+    { key: 'tax_method', label: '计税方式', format: (v: any) => TAX_VALUE_TO_LABEL[v] || v },
     { key: 'department', label: '部门' },
     { key: 'report_to', label: '汇报人' },
     { key: 'position', label: '职位' },

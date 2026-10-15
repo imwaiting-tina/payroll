@@ -18,6 +18,9 @@ export interface ColumnDef {
   label: string;       // 表头文字
   hidden?: boolean;    // true = 导出时不导出
   required?: boolean;  // true = 导入时必填
+  // 可选：导出时把原始值转成可读展示值（如枚举 normal → 正常计税）。
+  // 只在导出方向生效，导入仍按原样解析，因此导出成中文后可直接再导入。
+  format?: (val: any, row: any) => any;
 }
 
 export interface ExportDef {
@@ -37,10 +40,11 @@ export function exportXlsx(def: ExportDef, data: any[], period?: string) {
   // 列标题行
   const headerRow = visibleColumns.map(c => c.label);
 
-  // 数据行
+  // 数据行（列上配了 format 的，先把原始值转成展示值）
   const rows = data.map(row =>
     visibleColumns.map(c => {
-      const val = row[c.key];
+      const raw = row[c.key];
+      const val = c.format ? c.format(raw, row) : raw;
       return val !== undefined && val !== null ? val : '';
     })
   );
