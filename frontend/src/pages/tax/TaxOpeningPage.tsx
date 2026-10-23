@@ -8,6 +8,7 @@ import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport
 import { withSource } from '../../components/SourceTag';
 import FitHeightTable from '../../components/FitHeightTable';
 import { isActiveInPeriod } from '../../utils/employee';
+import { canEdit } from '../../utils/permissions';
 
 /**
  * 个税扣缴 — Tab 1：期初累计数（1-5月一次性录入）
@@ -39,6 +40,8 @@ const TaxOpeningPage: React.FC = () => {
   const [allRecords, setAllRecords] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
+  // 查阅角色：只读，不能导入
+  const readOnly = !canEdit();
   const period = useStore(s => s.currentPeriod);
 
   // 导入进度
@@ -101,6 +104,7 @@ const TaxOpeningPage: React.FC = () => {
 
   // 导入
   const handleImport = async (file: File) => {
+    if (readOnly) { message.warning('查阅角色不能导入数据'); return; }
     try {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
@@ -183,8 +187,11 @@ const TaxOpeningPage: React.FC = () => {
         <Select placeholder="部门" allowClear showSearch optionFilterProp="label" value={fDepartment} onChange={setFDepartment} style={{ width: 130 }}
           options={Object.values(employees).map((e: any) => ({ value: e.department, label: e.department })).filter((v, i, a) => v.value && a.findIndex(x => x.value === v.value) === i)} />
         <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
-        <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => { handleImport(file); return false; }}>
-          <Button icon={<UploadOutlined />}>导入</Button>
+        <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => {
+          if (readOnly) { message.warning('查阅角色不能导入数据'); return false; }
+          handleImport(file); return false;
+        }}>
+          <Button icon={<UploadOutlined />} disabled={readOnly}>导入</Button>
         </Upload>
       </Space>
       <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 1400 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />

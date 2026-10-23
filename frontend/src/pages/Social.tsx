@@ -4,12 +4,15 @@ import { Tabs } from 'antd';
 import { SafetyCertificateOutlined, SettingOutlined } from '@ant-design/icons';
 import EmployeeWelfare from './social/EmployeeWelfare';
 import WelfareSetPage from './social/WelfareSetPage';
+import { isViewer } from '../utils/permissions';
 
 const SocialPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  // 查阅角色只读：福利套设置整页都是写操作，直接藏掉
+  const viewer = isViewer();
 
-  const activeKey = location.pathname === '/social/welfare-sets' ? 'welfare-sets' : 'employee-welfare';
+  const activeKey = !viewer && location.pathname === '/social/welfare-sets' ? 'welfare-sets' : 'employee-welfare';
 
   return (
     <div>
@@ -19,13 +22,15 @@ const SocialPage: React.FC = () => {
         style={{ marginBottom: 16 }}
         items={[
           { key: 'employee-welfare', label: <span><SafetyCertificateOutlined />员工福利缴纳明细</span> },
-          { key: 'welfare-sets', label: <span><SettingOutlined />福利套设置</span> },
+          ...(viewer ? [] : [{ key: 'welfare-sets', label: <span><SettingOutlined />福利套设置</span> }]),
         ]}
       />
       <Routes>
         <Route path="/" element={<Navigate to="employee-welfare" replace />} />
         <Route path="employee-welfare" element={<EmployeeWelfare />} />
-        <Route path="welfare-sets" element={<WelfareSetPage />} />
+        <Route path="welfare-sets" element={
+          viewer ? <Navigate to="employee-welfare" replace /> : <WelfareSetPage />
+        } />
       </Routes>
     </div>
   );

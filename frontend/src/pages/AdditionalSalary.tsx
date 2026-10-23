@@ -12,6 +12,7 @@ import { round2 } from '../utils/round';
 import { useStore } from '../stores/appStore';
 import { ensureRoster } from '../utils/roster';
 import { DataStatusTag, anyLocked } from '../components/DataStatusTag';
+import { canEdit } from '../utils/permissions';
 
 /**
  * 附加薪酬板块
@@ -78,6 +79,8 @@ const AdditionalSalaryPage: React.FC = () => {
   const period = useStore(s => s.currentPeriod);
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
+  // 查阅角色：只读，不能导入
+  const readOnly = !canEdit();
   // 导入进度
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; importing: boolean }>({ done: 0, total: 0, importing: false });
 
@@ -161,6 +164,7 @@ const AdditionalSalaryPage: React.FC = () => {
   const handleExport = () => exportXlsx(EXPORT_DEF, records, period);
 
   const handleImport = async (file: File) => {
+    if (readOnly) { message.warning('查阅角色不能导入数据'); return; }
     try {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
@@ -240,10 +244,11 @@ const AdditionalSalaryPage: React.FC = () => {
         <Space wrap>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
           <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => {
+            if (readOnly) { message.warning('查阅角色不能导入数据'); return false; }
             if (locked) { message.warning('该月已冻结，不能导入'); return false; }
             handleImport(file); return false;
           }}>
-            <Button icon={<UploadOutlined />} disabled={locked}>导入</Button>
+            <Button icon={<UploadOutlined />} disabled={readOnly || locked}>导入</Button>
           </Upload>
         </Space>
       </Card>

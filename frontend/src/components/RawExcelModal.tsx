@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Button, Upload, Space, Table, message, Empty, Typography, Input } from 'antd';
 import { UploadOutlined, DownloadOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { uploadRawExcel, listRawExcel, downloadRawExcel, deleteRawExcel, type RawModule } from '../utils/rawExcel';
-import { canSubmit } from '../utils/permissions';
+import { canSubmit, canEdit } from '../utils/permissions';
 import { useStore } from '../stores/appStore';
 
 interface RawExcelModalProps {
@@ -27,7 +27,8 @@ const RawExcelModal: React.FC<RawExcelModalProps> = ({ open, module, moduleLabel
   const [note, setNote] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-  const canUpload = canSubmit(module); // 仅人事专员可上传
+  // 仅人事专员可上传；查阅角色一律只读（rawExcel 走原生 fetch，绕过 axios 拦截器，这里必须挡住）
+  const canUpload = canEdit() && canSubmit(module);
 
   const loadList = async () => {
     setLoading(true);

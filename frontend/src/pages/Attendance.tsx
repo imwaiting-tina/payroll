@@ -15,7 +15,8 @@ import { useHorizontalScroll } from '../utils/useHorizontalScroll';
 import { useStore } from '../stores/appStore';
 import { ensureRoster } from '../utils/roster';
 import { prevPeriod } from '../utils/format';
-import { canSubmit, canApprove } from '../utils/permissions';
+import { canSubmit, canApprove, canEdit } from '../utils/permissions';
+import { logApproval } from '../utils/approvalLog';
 import { fetchApprovalStatus, getAttendanceGate } from '../utils/approvalStatus';
 import RawExcelModal from '../components/RawExcelModal';
 import dayjs from 'dayjs';
@@ -115,6 +116,8 @@ const AttendancePage: React.FC = () => {
   const [calcProgress, setCalcProgress] = useState<{ done: number; total: number; active: boolean; label: string }>({ done: 0, total: 0, active: false, label: '' });
   const [rosterLocked, setRosterLocked] = useState(false);
   const [rawModalOpen, setRawModalOpen] = useState(false);
+  // 查阅角色：只读，不能计算/同步/添加/导入/编辑
+  const readOnly = !canEdit();
   // 审批确认弹窗
   const [approveConfirm, setApproveConfirm] = useState<{ type: 'submit' | 'approve' | 'reject' } | null>(null);
 
@@ -265,6 +268,7 @@ const AttendancePage: React.FC = () => {
 
   // 全部自动计算
   const handleAutoCalc = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     // 计薪天数校验（按规则表里的选项）
     const validPayDays = attRules.pay_days_options.length ? attRules.pay_days_options : [21.75, 26, 30];
     let invalidCount = 0;
@@ -307,6 +311,7 @@ const AttendancePage: React.FC = () => {
 
   // 同步上月考勤配置（考勤工资/是否参与考勤/计薪天数/工龄起算日）
   const handleSyncPrevMonth = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     if (attendanceLocked || attendanceSubmitted) { message.warning('该月考勤已冻结/已提交审批，不能同步'); return; }
     const prev = prevPeriod(period);
     try {
@@ -395,6 +400,7 @@ const AttendancePage: React.FC = () => {
 
   // 添加记录保存
   const handleAddSave = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     if (!addForm.unique_hash) {
       message.warning('请先选择员工');
       return;
@@ -510,6 +516,7 @@ const AttendancePage: React.FC = () => {
 
   // 导入
   const handleImport = async (file: File) => {
+    if (readOnly) { message.warning('查阅角色不能导入数据'); return; }
     try {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
@@ -693,6 +700,7 @@ const AttendancePage: React.FC = () => {
       const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
       if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
       await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '已提交审批' });
+      await logApproval({ period, module: 'attendance', action: 'submit' });
       message.success('考勤已提交审批');
       loadData();
     } catch (e: any) {
@@ -707,6 +715,7 @@ const AttendancePage: React.FC = () => {
       const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
       if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
       await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '已锁定' });
+      await logApproval({ period, module: 'attendance', action: 'approve' });
       message.success('考勤审批通过，当月考勤已冻结');
       loadData();
     } catch (e: any) {
@@ -723,6 +732,7 @@ const AttendancePage: React.FC = () => {
       const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
       if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
       await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '正常' });
+      await logApproval({ period, module: 'attendance', action: 'unlock' });
       message.success('考勤已解锁，需重新提交审批');
       setUnlockModal(false);
       loadData();
@@ -739,6 +749,7 @@ const AttendancePage: React.FC = () => {
       const res = await api.get(`/attendance_records?select=id&period=eq.${period}&limit=1`);
       if (res.data.length === 0) { message.warning('该月暂无考勤数据'); return; }
       await api.patch(`/attendance_records?period=eq.${period}`, { data_status: '已计算' });
+      await logApproval({ period, module: 'attendance', action: 'reject' });
       message.success('已退回修改');
       loadData();
     } catch (e: any) {
@@ -828,7 +839,7 @@ const AttendancePage: React.FC = () => {
       render: (_: any, r: any) => (
         <Space size={4}>
           <Button size="small" onClick={() => openDetail(r)}>查看</Button>
-          <Button size="small" type="primary" disabled={isLocked(r)} onClick={() => openEdit(r)}>编辑</Button>
+          <Button size="small" type="primary" disabled={readOnly || isLocked(r)} onClick={() => openEdit(r)}>编辑</Button>
         </Space>
       ),
     },
@@ -839,9 +850,9 @@ const AttendancePage: React.FC = () => {
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <span style={{ color: '#666' }}>{period} 考勤{attendanceLocked ? '（已锁定）' : attendanceSubmitted ? '（已提交审批）' : ''}</span>
-          <Button type="primary" icon={<CalculatorOutlined />} onClick={handleAutoCalc} disabled={attendanceLocked || attendanceSubmitted}>自动计算</Button>
-          <Button icon={<SyncOutlined />} onClick={handleSyncPrevMonth} disabled={attendanceLocked || attendanceSubmitted}>同步上月数据</Button>
-          <Button icon={<PlusOutlined />} onClick={openAdd} disabled={attendanceLocked || attendanceSubmitted}>添加记录</Button>
+          <Button type="primary" icon={<CalculatorOutlined />} onClick={handleAutoCalc} disabled={readOnly || attendanceLocked || attendanceSubmitted}>自动计算</Button>
+          <Button icon={<SyncOutlined />} onClick={handleSyncPrevMonth} disabled={readOnly || attendanceLocked || attendanceSubmitted}>同步上月数据</Button>
+          <Button icon={<PlusOutlined />} onClick={openAdd} disabled={readOnly || attendanceLocked || attendanceSubmitted}>添加记录</Button>
           <Dropdown menu={{
             items: [
               { key: 'full', label: '导出报表' },
@@ -855,13 +866,16 @@ const AttendancePage: React.FC = () => {
             <Button icon={<DownloadOutlined />}>导出</Button>
           </Dropdown>
           <Button icon={<SettingOutlined />} onClick={() => setColSettingOpen(true)}>列设置</Button>
-          <Button icon={<SettingOutlined />} onClick={() => navigate('/attendance/rules')}>规则配置</Button>
+          {!readOnly && (
+            <Button icon={<SettingOutlined />} onClick={() => navigate('/attendance/rules')}>规则配置</Button>
+          )}
           <Button type="primary" icon={<FileExcelOutlined />} onClick={() => setRawModalOpen(true)}>原始表格</Button>
           <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => {
+            if (readOnly) { message.warning('查阅角色不能导入数据'); return false; }
             if (attendanceLocked || attendanceSubmitted) { message.warning('该月考勤已冻结/已提交审批，不能导入'); return false; }
             handleImport(file); return false;
           }}>
-            <Button icon={<UploadOutlined />} disabled={attendanceLocked || attendanceSubmitted}>导入考勤</Button>
+            <Button icon={<UploadOutlined />} disabled={readOnly || attendanceLocked || attendanceSubmitted}>导入考勤</Button>
           </Upload>
           {canSubmit('attendance') && !attendanceSubmitted && (
             <Button type="primary" ghost icon={<SendOutlined />}
@@ -1031,7 +1045,7 @@ const AttendancePage: React.FC = () => {
         extra={
           <Space>
             <Button onClick={() => setAddOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleAddSave}>保存</Button>
+            <Button type="primary" onClick={handleAddSave} disabled={readOnly}>保存</Button>
           </Space>
         }
       >

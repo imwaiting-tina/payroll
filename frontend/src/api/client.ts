@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL, SCF_CONFIG } from '../config';
+import { isViewer } from '../utils/permissions';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,11 +11,32 @@ const api = axios.create({
   },
 });
 
+// 查阅角色只读：放行的「写」请求
+// 花名册懒生成由 ensureRoster() 在打开新月份时自动触发，属于系统补齐而非用户编辑，
+// 若一并拦掉，查阅者打开尚无数据的月份会看到空表，像是系统坏了。
+const VIEWER_WRITE_ALLOWLIST = ['/rpc/generate_roster_for_month'];
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('supabase_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // 兜底防线：拦下所有可能漏掉 UI 门控的写请求
+  if (isViewer()) {
+    const method = (config.method || 'get').toLowerCase();
+    const url = config.url || '';
+    const allowed = VIEWER_WRITE_ALLOWLIST.some((p) => url.includes(p));
+    if (method !== 'get' && !allowed) {
+      const msg = '查阅角色仅有查看权限，不能修改数据';
+      // 构造带 response 的错误对象，让各页面既有的
+      // `e?.response?.data?.message` 能显示真实原因，而不是回退到默认文案
+      const err: any = new Error(msg);
+      err.response = { data: { message: msg } };
+      return Promise.reject(err);
+    }
+  }
+
   return config;
 });
 

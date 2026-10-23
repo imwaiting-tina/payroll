@@ -10,7 +10,8 @@ import { genUniqueHash } from '../utils/hash';
 import { withSource } from '../components/SourceTag';
 import FitHeightTable from '../components/FitHeightTable';
 import { useStore } from '../stores/appStore';
-import { canSubmit, canApprove } from '../utils/permissions';
+import { canSubmit, canApprove, canEdit } from '../utils/permissions';
+import { logApproval } from '../utils/approvalLog';
 import { fetchApprovalStatus } from '../utils/approvalStatus';
 import { ensureRoster } from '../utils/roster';
 import api, { bulkUpsert } from '../api/client';
@@ -74,6 +75,8 @@ const EmployeesPage: React.FC = () => {
   const period = useStore(s => s.currentPeriod);
   const [rosterLocked, setRosterLocked] = useState(false);
   const [rosterSubmitted, setRosterSubmitted] = useState(false);
+  // 查阅角色：只读，不能编辑/导入/更新花名册
+  const readOnly = !canEdit();
   // 薪资是否已审批锁定（薪资审批通过后，花名册不能解锁）
   const [payrollLockedForPeriod, setPayrollLockedForPeriod] = useState(false);
   // 解锁确认弹窗
@@ -184,6 +187,7 @@ const EmployeesPage: React.FC = () => {
 
   // 保存
   const handleSave = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     // 冻结月禁止新增/编辑（已锁定 或 已提交审批）
     if (rosterLocked || rosterSubmitted) {
       message.warning('该月花名册已锁定/已提交审批，不能修改');
@@ -246,6 +250,7 @@ const EmployeesPage: React.FC = () => {
 
   // ====== 删除（物理删除，数据库同步删除） ======
   const handleDelete = async (id: number) => {
+    if (readOnly) { message.warning('查阅角色不能删除数据'); return; }
     try {
       await api.delete(`/employees?id=eq.${id}`);
       message.success('已删除');
@@ -268,6 +273,7 @@ const EmployeesPage: React.FC = () => {
 
   // ====== 导入（增量：有唯一值→更新，无唯一值→现算新增，重复→跳过） ======
   const handleImport = async (file: File) => {
+    if (readOnly) { message.warning('查阅角色不能导入数据'); return; }
     try {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
@@ -448,6 +454,7 @@ const EmployeesPage: React.FC = () => {
       if (recs.data.length === 0) { message.warning('该月暂无花名册数据'); return; }
       // 同 body 批量更新：一次 PATCH 应用到当月全部行
       await api.patch(`/employees?period=eq.${period}`, { data_status: '已提交审批' });
+      await logApproval({ period, module: 'roster', action: 'submit' });
       message.success('花名册已提交审批');
       loadEmployees();
     } catch (e: any) {
@@ -462,6 +469,7 @@ const EmployeesPage: React.FC = () => {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
       if (recs.data.length === 0) { message.warning('该月暂无花名册数据'); return; }
       await api.patch(`/employees?period=eq.${period}`, { data_status: '已锁定' });
+      await logApproval({ period, module: 'roster', action: 'approve' });
       message.success('花名册审批通过，当月花名册已冻结');
       loadEmployees();
     } catch (e: any) {
@@ -478,6 +486,7 @@ const EmployeesPage: React.FC = () => {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
       if (recs.data.length === 0) { message.warning('该月暂无花名册数据'); return; }
       await api.patch(`/employees?period=eq.${period}`, { data_status: '正常' });
+      await logApproval({ period, module: 'roster', action: 'unlock' });
       message.success('花名册已解锁，需重新提交审批');
       setUnlockModal(false);
       loadEmployees();
@@ -493,6 +502,7 @@ const EmployeesPage: React.FC = () => {
     try {
       const recs = await api.get(`/employees?select=id&period=eq.${period}`);
       await api.patch(`/employees?period=eq.${period}`, { data_status: '草稿' });
+      await logApproval({ period, module: 'roster', action: 'reject' });
       message.success('已退回修改');
       loadEmployees();
     } catch (e: any) {
@@ -531,7 +541,7 @@ const EmployeesPage: React.FC = () => {
     {
       title: '操作', key: 'actions', width: 80, fixed: 'right',
       render: (_: any, r: Employee) => (
-        <Button size="small" onClick={() => openEdit(r)} disabled={rosterLocked || rosterSubmitted}>编辑</Button>
+        <Button size="small" onClick={() => openEdit(r)} disabled={readOnly || rosterLocked || rosterSubmitted}>编辑</Button>
       ),
     },
   ];
@@ -542,7 +552,7 @@ const EmployeesPage: React.FC = () => {
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <span style={{ color: '#666' }}>{period} 花名册{rosterLocked ? '（已锁定）' : rosterSubmitted ? '（已提交审批）' : ''}</span>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} disabled={rosterLocked || rosterSubmitted}>添加员工</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} disabled={readOnly || rosterLocked || rosterSubmitted}>添加员工</Button>
           <Dropdown menu={{
             items: [
               { key: 'template', label: '导出空白模板' },
@@ -552,10 +562,10 @@ const EmployeesPage: React.FC = () => {
           }}>
             <Button icon={<DownloadOutlined />}>导出</Button>
           </Dropdown>
-          <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => { if (rosterLocked || rosterSubmitted) { message.warning('该月花名册已锁定/已提交审批，不能导入'); return false; } handleImport(file); return false; }}>
-            <Button icon={<UploadOutlined />} disabled={rosterLocked || rosterSubmitted}>导入</Button>
+          <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => { if (readOnly) { message.warning('查阅角色不能导入数据'); return false; } if (rosterLocked || rosterSubmitted) { message.warning('该月花名册已锁定/已提交审批，不能导入'); return false; } handleImport(file); return false; }}>
+            <Button icon={<UploadOutlined />} disabled={readOnly || rosterLocked || rosterSubmitted}>导入</Button>
           </Upload>
-          <Button icon={<SyncOutlined />} onClick={() => setUpdateModal(true)} disabled={rosterLocked || rosterSubmitted}>更新花名册</Button>
+          <Button icon={<SyncOutlined />} onClick={() => setUpdateModal(true)} disabled={readOnly || rosterLocked || rosterSubmitted}>更新花名册</Button>
           <Input
             prefix={<SearchOutlined />}
             placeholder="搜索姓名"
@@ -627,7 +637,7 @@ const EmployeesPage: React.FC = () => {
         extra={
           <Space>
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleSave}>保存</Button>
+            <Button type="primary" onClick={handleSave} disabled={readOnly}>保存</Button>
           </Space>
         }
       >
@@ -679,7 +689,7 @@ const EmployeesPage: React.FC = () => {
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
         </Form>
-        {editingEmployee && (
+        {editingEmployee && !readOnly && (
           <div style={{ marginTop: 16, textAlign: 'right' }}>
             <Popconfirm
               title="确认删除该员工？"

@@ -13,7 +13,8 @@ import { exportSummaryPdf, type SummaryRow } from '../utils/pdfExport';
 import RawExcelModal from '../components/RawExcelModal';
 import CalcProgress from '../components/CalcProgress';
 import { useStore } from '../stores/appStore';
-import { canSubmit, canApprove } from '../utils/permissions';
+import { canSubmit, canApprove, canEdit } from '../utils/permissions';
+import { logApproval } from '../utils/approvalLog';
 import { fetchApprovalStatus } from '../utils/approvalStatus';
 
 /**
@@ -81,6 +82,8 @@ const PayrollPage: React.FC = () => {
   const [attendanceLocked, setAttendanceLocked] = useState(false);
   const [payrollSubmitted, setPayrollSubmitted] = useState(false);
   const [payrollLocked, setPayrollLocked] = useState(false);
+  // 查阅角色：只读，不能刷新同步/保存/提交/审批
+  const readOnly = !canEdit();
   // 薪资审批通过后询问是否下载 summary PDF 的弹窗
   const [summaryModal, setSummaryModal] = useState(false);
   // 原始表格弹窗
@@ -325,6 +328,7 @@ const PayrollPage: React.FC = () => {
 
   // 刷新同步数据：重新拉取各模块数据源 → 重新计算 → 落库 salary_records
   const handleRefreshSync = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     setLoading(true);
     try {
       const { empMap, merged } = await fetchAndCompute();
@@ -421,6 +425,7 @@ const PayrollPage: React.FC = () => {
 
   // 保存计算结果（落库 salary_records）
   const handleSaveResult = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     const rows: any[] = [];
     for (const r of records) {
       try {
@@ -455,10 +460,15 @@ const PayrollPage: React.FC = () => {
   // 提交薪资的前置关卡：花名册+考勤都已审批锁定
   const payrollGatePass = rosterLocked && attendanceLocked;
 
+  // 更新整月状态。失败必须抛出——以前这里空 catch 吞错，
+  // 会出现"界面提示已冻结、实际有表没锁上"的假成功。
   const updateTableStatus = async (table: string, status: string) => {
     try {
       await api.patch(`/${table}?period=eq.${period}`, { data_status: status });
-    } catch { /* 忽略 */ }
+    } catch (e: any) {
+      const reason = e?.response?.data?.message || e?.message || '未知错误';
+      throw new Error(`${table} 更新失败：${reason}`);
+    }
   };
 
   const handleSubmit = async () => {
@@ -474,28 +484,39 @@ const PayrollPage: React.FC = () => {
 
   const confirmSubmit = async () => {
     // 只提交薪资模块的审批（花名册/考勤各自独立审批，不连带改状态）
-    await updateTableStatus('salary_records', '已提交审批');
-    message.success('已提交薪资审批');
-    setApproveModal(null);
-    loadData();
+    try {
+      await updateTableStatus('salary_records', '已提交审批');
+      await logApproval({ period, module: 'payroll', action: 'submit' });
+      message.success('已提交薪资审批');
+      setApproveModal(null);
+      loadData();
+    } catch (e: any) {
+      message.error(e?.message || '提交失败');
+    }
   };
 
   const confirmApprove = async () => {
     // 薪资是最终审批：通过后冻结当月所有模块数据，之后都不能再改
+    // 注意：tax_monthly_calcs 没有 data_status 列，不在冻结范围内
     const tables = [
-      'employees',              // 花名册
-      'attendance_records',     // 考勤
-      'employee_welfare_records', // 社保/福利
+      'employees',                 // 花名册
+      'attendance_records',        // 考勤
+      'employee_welfare_records',  // 社保/福利
       'additional_salary_records', // 附加薪酬
-      'tax_monthly_calcs',      // 个税
-      'salary_records',         // 薪资
+      'salary_records',            // 薪资
     ];
-    await Promise.all(tables.map(t => updateTableStatus(t, '已锁定')));
-    message.success('审批通过，当月所有数据已冻结');
-    setApproveModal(null);
-    // 审批通过后弹窗询问是否下载 summary PDF
-    setSummaryModal(true);
-    loadData();
+    try {
+      // 逐张锁，任何一张失败都中断并报错，避免"部分锁定却提示全部冻结"
+      for (const t of tables) await updateTableStatus(t, '已锁定');
+      await logApproval({ period, module: 'payroll', action: 'approve' });
+      message.success('审批通过，当月所有数据已冻结');
+      setApproveModal(null);
+      // 审批通过后弹窗询问是否下载 summary PDF
+      setSummaryModal(true);
+      loadData();
+    } catch (e: any) {
+      message.error(e?.message || '审批失败');
+    }
   };
 
   // 薪资审批通过后，直接从当前月份数据组装并按公司/部门导出 summary PDF
@@ -570,11 +591,17 @@ const PayrollPage: React.FC = () => {
       return;
     }
     // 只退回薪资模块（花名册/考勤由各自审批人处理）
-    await updateTableStatus('salary_records', '退回修改');
-    message.success('已退回修改');
-    setApproveModal(null);
-    setRejectReason('');
-    loadData();
+    try {
+      await updateTableStatus('salary_records', '退回修改');
+      // 退回理由以前只做前端校验就丢弃，现在记进审批线
+      await logApproval({ period, module: 'payroll', action: 'reject', note: rejectReason.trim() });
+      message.success('已退回修改');
+      setApproveModal(null);
+      setRejectReason('');
+      loadData();
+    } catch (e: any) {
+      message.error(e?.message || '退回失败');
+    }
   };
 
   const columns: any[] = [
@@ -625,10 +652,10 @@ const PayrollPage: React.FC = () => {
       <CalcProgress {...calcProgress} />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
-          <Button type="primary" icon={<SyncOutlined />} onClick={handleRefreshSync} loading={loading} disabled={payrollLocked}>刷新同步数据</Button>
+          <Button type="primary" icon={<SyncOutlined />} onClick={handleRefreshSync} loading={loading} disabled={readOnly || payrollLocked}>刷新同步数据</Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>导出工资报表</Button>
           <Button icon={<DownloadOutlined />} onClick={handleExportPayslip}>导出工资条</Button>
-          <Button type="primary" onClick={handleSaveResult} disabled={payrollLocked}>保存计算结果</Button>
+          <Button type="primary" onClick={handleSaveResult} disabled={readOnly || payrollLocked}>保存计算结果</Button>
           <Button type="primary" icon={<FileExcelOutlined />} onClick={() => setRawModalOpen(true)}>原始表格</Button>
           {isOperator && (
             <Button type="primary" icon={<SendOutlined />} disabled={!payrollGatePass || payrollSubmitted || payrollLocked} onClick={() => {

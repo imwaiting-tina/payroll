@@ -19,6 +19,7 @@ import { prevPeriod } from '../../utils/format';
 import dayjs from 'dayjs';
 import { useStore } from '../../stores/appStore';
 import { ensureRoster } from '../../utils/roster';
+import { canEdit } from '../../utils/permissions';
 
 const defaultPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
@@ -110,6 +111,8 @@ const EmployeeWelfare: React.FC = () => {
   const period = useStore(s => s.currentPeriod);
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
+  // 查阅角色：只读，不能编辑/添加/计算/同步/导入/删除
+  const readOnly = !canEdit();
   // 计算进度
   const [calcProgress, setCalcProgress] = useState<{ done: number; total: number; active: boolean; label: string }>({ done: 0, total: 0, active: false, label: '' });
   // 导入进度
@@ -341,6 +344,7 @@ const EmployeeWelfare: React.FC = () => {
 
   // 一键自动计算：遍历所有记录，逐条计算并保存
   const handleBatchCalc = async (list?: any[]) => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     const target = list ?? records;
     const rows: any[] = [];
     let skipped = 0;
@@ -424,6 +428,7 @@ const EmployeeWelfare: React.FC = () => {
 
   // 同步上月福利配置（生效/结束日期、社保/公积金套、社保/公积金基数、补充公积金基数、不缴纳原因）并重新计算
   const handleSyncPrevMonth = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     if (locked) { message.warning('该月已冻结，不能同步'); return; }
     const prev = prevPeriod(period);
     try {
@@ -447,6 +452,7 @@ const EmployeeWelfare: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     await form.validateFields();
     const values = formValues;
     // 只提交数据库表真实存在的字段（排除前端计算展示用的中间字段）
@@ -533,6 +539,7 @@ const EmployeeWelfare: React.FC = () => {
 
   // ====== 导入（增量：有唯一值→更新，无唯一值→新增） ======
   const handleImport = async (file: File) => {
+    if (readOnly) { message.warning('查阅角色不能导入数据'); return; }
     try {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
@@ -631,7 +638,7 @@ const EmployeeWelfare: React.FC = () => {
       render: (_: any, r: any) => (
         <Space>
           <Button size="small" onClick={() => openDetail(r)}>查看</Button>
-          <Button size="small" disabled={locked} onClick={() => openEdit(r)}>编辑</Button>
+          <Button size="small" disabled={readOnly || locked} onClick={() => openEdit(r)}>编辑</Button>
         </Space>
       ),
     },
@@ -650,9 +657,9 @@ const EmployeeWelfare: React.FC = () => {
       )}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space>
-          <Button type="primary" icon={<PlusOutlined />} disabled={locked} onClick={openCreate}>添加记录</Button>
-          <Button type="primary" icon={<CalculatorOutlined />} disabled={locked} onClick={() => handleBatchCalc()}>一键计算</Button>
-          <Button icon={<SyncOutlined />} disabled={locked} onClick={handleSyncPrevMonth}>同步上月数据</Button>
+          <Button type="primary" icon={<PlusOutlined />} disabled={readOnly || locked} onClick={openCreate}>添加记录</Button>
+          <Button type="primary" icon={<CalculatorOutlined />} disabled={readOnly || locked} onClick={() => handleBatchCalc()}>一键计算</Button>
+          <Button icon={<SyncOutlined />} disabled={readOnly || locked} onClick={handleSyncPrevMonth}>同步上月数据</Button>
           <Dropdown menu={{
             items: [
               { key: 'template', label: '导出空白模板' },
@@ -664,10 +671,11 @@ const EmployeeWelfare: React.FC = () => {
             <Button icon={<DownloadOutlined />}>导出</Button>
           </Dropdown>
           <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={(file) => {
+            if (readOnly) { message.warning('查阅角色不能导入数据'); return false; }
             if (locked) { message.warning('该月已冻结，不能导入'); return false; }
             handleImport(file); return false;
           }}>
-            <Button icon={<UploadOutlined />} disabled={locked}>导入</Button>
+            <Button icon={<UploadOutlined />} disabled={readOnly || locked}>导入</Button>
           </Upload>
         </Space>
       </Card>
@@ -702,8 +710,8 @@ const EmployeeWelfare: React.FC = () => {
         extra={
           <Space>
             <Button onClick={() => setEditOpen(false)}>取消</Button>
-            <Button onClick={handleCalc}>计算</Button>
-            <Button type="primary" onClick={handleSave}>保存</Button>
+            <Button onClick={handleCalc} disabled={readOnly}>计算</Button>
+            <Button type="primary" onClick={handleSave} disabled={readOnly}>保存</Button>
           </Space>
         }
       >
@@ -807,7 +815,7 @@ const EmployeeWelfare: React.FC = () => {
             </Card>
           )}
         </Form>
-        {editing && (
+        {editing && !readOnly && (
           <div style={{ marginTop: 16, textAlign: 'right' }}>
             <Popconfirm
               title="确认删除该记录？"

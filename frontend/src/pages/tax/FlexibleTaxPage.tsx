@@ -9,6 +9,7 @@ import { isActiveInPeriod } from '../../utils/employee';
 import { round2 } from '../../utils/round';
 import { useStore } from '../../stores/appStore';
 import { ensureRoster } from '../../utils/roster';
+import { canEdit } from '../../utils/permissions';
 import CalcProgress from '../../components/CalcProgress';
 
 /**
@@ -44,6 +45,8 @@ const FlexibleTaxPage: React.FC = () => {
   const [allRecords, setAllRecords] = useState<any[]>([]);
   const period = useStore(s => s.currentPeriod);
   const [loading, setLoading] = useState(false);
+  // 查阅角色：只读，不能计算
+  const readOnly = !canEdit();
   // 计算进度
   const [calcProgress, setCalcProgress] = useState<{ done: number; total: number; active: boolean; label: string }>({ done: 0, total: 0, active: false, label: '' });
   const [fKeyword, setFKeyword] = useState('');
@@ -105,6 +108,7 @@ const FlexibleTaxPage: React.FC = () => {
 
   // 计算并保存灵工个税
   const handleCalc = async () => {
+    if (readOnly) { message.warning('查阅角色不能修改数据'); return; }
     const rows: any[] = [];
     const monthNumber = parseInt(period.split('-')[1]) || 1;
     setCalcProgress({ done: 0, total: records.length, active: true, label: '正在计算灵工个税' });
@@ -144,7 +148,7 @@ const FlexibleTaxPage: React.FC = () => {
           options={allRecords.map((e: any) => ({ value: e.pay_company, label: e.pay_company })).filter((v, i, a) => a.findIndex(x => x.value === v.value) === i)} />
         <Select placeholder="部门" allowClear showSearch optionFilterProp="label" value={fDepartment} onChange={setFDepartment} style={{ width: 130 }}
           options={allRecords.map((e: any) => ({ value: e.department, label: e.department })).filter((v, i, a) => v.value && a.findIndex(x => x.value === v.value) === i)} />
-        <Button type="primary" icon={<CalculatorOutlined />} onClick={handleCalc}>计算灵工个税</Button>
+        <Button type="primary" icon={<CalculatorOutlined />} onClick={handleCalc} disabled={readOnly}>计算灵工个税</Button>
         <Button icon={<DownloadOutlined />} onClick={() => exportXlsx(EXPORT_DEF, filteredRecords, period)}>导出</Button>
       </Space>
       <div style={{ marginBottom: 12, color: '#888' }}>

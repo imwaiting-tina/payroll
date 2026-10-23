@@ -10,7 +10,7 @@ const ADMIN_URL = `${FUNCTIONS_URL}/admin-users`;
 
 const token = () => localStorage.getItem('supabase_token') || '';
 
-async function adminFetch(method: 'GET' | 'POST' | 'PATCH', body?: any) {
+async function adminFetch(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: any) {
   return fetch(ADMIN_URL, {
     method,
     headers: {
@@ -21,10 +21,15 @@ async function adminFetch(method: 'GET' | 'POST' | 'PATCH', body?: any) {
   });
 }
 
+/** 是否仍在停用期内（banned_until 可能是已经过期的历史值） */
+const isBanned = (u: any) => !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now();
+
 const AccountManagementPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => { loadUsers(); }, []);
@@ -123,9 +128,9 @@ const AccountManagementPage: React.FC = () => {
   // 停用/启用账号
   const handleToggleBan = async (user: any) => {
     try {
-      const res = await adminFetch('PATCH', { id: user.id, ban_duration: user.banned_until ? 'none' : '876000h' });
+      const res = await adminFetch('PATCH', { id: user.id, ban_duration: isBanned(user) ? 'none' : '876000h' });
       if (res.ok) {
-        message.success(user.banned_until ? '已启用' : '已停用');
+        message.success(isBanned(user) ? '已启用' : '已停用');
         loadUsers();
       } else {
         const err = await res.json();
@@ -133,6 +138,27 @@ const AccountManagementPage: React.FC = () => {
       }
     } catch (e: any) {
       message.error(e.message || '操作失败');
+    }
+  };
+
+  // 删除账号（仅限已停用；服务端还会再校验一次）
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await adminFetch('DELETE', { id: deleteTarget.id });
+      if (res.ok) {
+        message.success('账号已删除');
+        setDeleteTarget(null);
+        loadUsers();
+      } else {
+        const err = await res.json();
+        message.error(err.error || '删除失败');
+      }
+    } catch (e: any) {
+      message.error(e.message || '删除失败');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -144,11 +170,11 @@ const AccountManagementPage: React.FC = () => {
     },
     {
       title: '状态', dataIndex: 'banned_until', key: 'status', width: 90,
-      render: (v: any) => v ? <Tag color="red">已停用</Tag> : <Tag color="green">正常</Tag>,
+      render: (_: any, u: any) => isBanned(u) ? <Tag color="red">已停用</Tag> : <Tag color="green">正常</Tag>,
     },
     { title: '创建时间', dataIndex: 'created_at', key: 'created', width: 180, render: (v: string) => v ? new Date(v).toLocaleString() : '—' },
     {
-      title: '操作', key: 'act', width: 360,
+      title: '操作', key: 'act', width: 420,
       render: (_: any, u: any) => (
         <Space size={4} wrap>
           <Select
@@ -159,9 +185,13 @@ const AccountManagementPage: React.FC = () => {
             options={ROLE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
           />
           <Button size="small" onClick={() => handleResetPassword(u.id)}>重置密码</Button>
-          <Popconfirm title={u.banned_until ? '确认启用该账号？' : '确认停用该账号？'} onConfirm={() => handleToggleBan(u)}>
-            <Button size="small" danger={!u.banned_until}>{u.banned_until ? '启用' : '停用'}</Button>
+          <Popconfirm title={isBanned(u) ? '确认启用该账号？' : '确认停用该账号？'} onConfirm={() => handleToggleBan(u)}>
+            <Button size="small" danger={!isBanned(u)}>{isBanned(u) ? '启用' : '停用'}</Button>
           </Popconfirm>
+          {/* 只有已停用的账号才显示删除键 */}
+          {isBanned(u) && (
+            <Button size="small" danger onClick={() => setDeleteTarget(u)}>删除</Button>
+          )}
         </Space>
       ),
     },
@@ -196,6 +226,25 @@ const AccountManagementPage: React.FC = () => {
             <Select options={ROLE_OPTIONS} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 删除账号二次确认：不可恢复，必须醒目 */}
+      <Modal
+        title="删除账号"
+        open={!!deleteTarget}
+        onOk={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+        okText="确认删除"
+        okButtonProps={{ danger: true }}
+        cancelText="取消"
+        confirmLoading={deleting}
+      >
+        <div style={{ marginBottom: 10 }}>
+          即将删除账号：<strong>{deleteTarget?.email}</strong>
+        </div>
+        <div style={{ color: '#cf1322' }}>
+          删除后不可恢复，该账号将无法再登录。已产生的业务数据不受影响。
+        </div>
       </Modal>
     </div>
   );

@@ -21,7 +21,7 @@ const admin = createClient(SUPABASE_URL, SECRET_KEY, {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 };
 
 function json(data: unknown, status = 200) {
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    await requireAdmin(req);
+    const caller = await requireAdmin(req);
 
     if (req.method === 'GET') {
       // 列出账号
@@ -80,10 +80,48 @@ Deno.serve(async (req) => {
       return json({ user: data.user });
     }
 
+    if (req.method === 'DELETE') {
+      // 删除账号：只允许删除已停用的账号，且不能删自己 / 最后一名管理员
+      const { id } = await req.json();
+      if (!id) throw new Error('缺少用户 id');
+      if (id === caller.id) throw new Error('不能删除自己的账号');
+
+      const { data, error } = await admin.auth.admin.getUserById(id);
+      if (error || !data.user) throw new Error('账号不存在');
+
+      // banned_until 可能是已经过期的历史值，必须判断是否仍在停用期内
+      const bannedUntil = data.user.banned_until;
+      const isBanned = !!bannedUntil && new Date(bannedUntil).getTime() > Date.now();
+      if (!isBanned) throw new Error('只能删除已停用的账号');
+
+      // 最后一名管理员保护（只统计未停用的管理员）
+      if (data.user.user_metadata?.role === 'admin') {
+        const { data: list, error: listErr } = await admin.auth.admin.listUsers({ perPage: 1000 });
+        if (listErr) throw listErr;
+        const activeAdmins = list.users.filter((u) => {
+          const b = u.banned_until;
+          const banned = !!b && new Date(b).getTime() > Date.now();
+          return u.user_metadata?.role === 'admin' && !banned;
+        });
+        if (activeAdmins.length <= 1) throw new Error('不能删除最后一名管理员');
+      }
+
+      const { error: delErr } = await admin.auth.admin.deleteUser(id);
+      if (delErr) throw delErr;
+      return json({ ok: true });
+    }
+
     return json({ error: '未知请求' }, 400);
   } catch (e: any) {
     const msg = e.message || '操作失败';
-    const status = msg === '无管理员权限' ? 403 : msg === '未登录' || msg === '登录已过期' ? 401 : 500;
+    const badRequest = [
+      '缺少用户 id', '账号不存在', '只能删除已停用的账号',
+      '不能删除自己的账号', '不能删除最后一名管理员',
+    ].includes(msg);
+    const status = msg === '无管理员权限' ? 403
+      : msg === '未登录' || msg === '登录已过期' ? 401
+      : badRequest ? 400
+      : 500;
     return json({ error: msg }, status);
   }
 });

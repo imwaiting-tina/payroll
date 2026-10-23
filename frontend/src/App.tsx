@@ -13,11 +13,18 @@ import PayrollPage from './pages/PayrollRun';
 import TaxPage from './pages/Tax';
 import AdditionalSalaryPage from './pages/AdditionalSalary';
 import SettingsPage from './pages/Settings';
+import { isViewer } from './utils/permissions';
 
 // 简单的认证守卫
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = localStorage.getItem('supabase_token');
   if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
+// 查阅角色守卫：纯配置/管理页面不允许只读账号进入
+const NoViewerGuard: React.FC<{ children: React.ReactNode; redirect: string }> = ({ children, redirect }) => {
+  if (isViewer()) return <Navigate to={redirect} replace />;
   return <>{children}</>;
 };
 
@@ -43,8 +50,12 @@ const App: React.FC = () => {
                   <Route path="/tax" element={<TaxPage />} />
                   <Route path="/additional" element={<AdditionalSalaryPage />} />
                   <Route path="/attendance" element={<AttendancePage />} />
-                  <Route path="/attendance/rules" element={<AttendanceRulesPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/attendance/rules" element={
+                    <NoViewerGuard redirect="/attendance"><AttendanceRulesPage /></NoViewerGuard>
+                  } />
+                  <Route path="/settings" element={
+                    <NoViewerGuard redirect="/"><SettingsPage /></NoViewerGuard>
+                  } />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppLayout>

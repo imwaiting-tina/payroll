@@ -1,15 +1,20 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Layout, Menu, Typography, Avatar, Dropdown, Button, message, Tag, Input, Modal, Progress } from 'antd';
+import { Layout, Menu, Typography, Avatar, Dropdown, Button, message, Tag, Input, Modal, Progress, Table } from 'antd';
 import {
   TeamOutlined, DollarOutlined, CalculatorOutlined,
   LogoutOutlined, ScheduleOutlined, SyncOutlined,
   UserOutlined, SettingOutlined, SafetyCertificateOutlined, PercentageOutlined, PlusCircleOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { globalRefresh } from '../utils/globalRefresh';
 import { useStore } from '../stores/appStore';
-import { getRole, ROLE_LABELS, ROLE_COLORS, type Role, isRosterApprover, isAttendanceApprover, isPayrollApprover } from '../utils/permissions';
-import { fetchApprovalStatus } from '../utils/approvalStatus';
+import { getRole, canEdit, ROLE_LABELS, ROLE_COLORS, type Role, isRosterApprover, isAttendanceApprover, isPayrollApprover } from '../utils/permissions';
+import { fetchApprovalStatus, type ApprovalStatus } from '../utils/approvalStatus';
+import {
+  fetchApprovalLogs, MODULE_LABELS, ACTION_LABELS, ACTION_COLORS,
+  type ApprovalLog, type ApprovalModule,
+} from '../utils/approvalLog';
 import { ensureRoster } from '../utils/roster';
 import api from '../api/client';
 
@@ -35,6 +40,8 @@ const ROLE_MENU: Record<Role, string[]> = {
   roster_approver: ALL_KEYS,
   attendance_approver: ALL_KEYS,
   payroll_approver: ALL_KEYS,
+  // 查阅只读：能看业务数据，但进不了系统设置
+  viewer: ALL_KEYS.filter(k => k !== '/settings'),
 };
 
 // 根据角色过滤菜单
@@ -43,6 +50,18 @@ const getMenuItems = () => {
   const allowed = ROLE_MENU[role] || ROLE_MENU.hr_staff;
   return ALL_MENU.filter(m => allowed.includes(m.key));
 };
+
+// 审批线：三个模块固定顺序
+const APPROVAL_MODULES: ApprovalModule[] = ['roster', 'attendance', 'payroll'];
+
+// Supabase 返回的是带时区的 ISO 时间，转成本地时间显示
+function formatTime(value: string): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -65,6 +84,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const dragStartRef = useRef<{ x: number; width: number } | null>(null);
   // 审批提醒弹窗
   const [approvalAlert, setApprovalAlert] = useState<{ title: string; alerts: { text: string; path: string }[] } | null>(null);
+  // 审批线弹窗
+  const [approvalLineOpen, setApprovalLineOpen] = useState(false);
+  const [approvalLineLoading, setApprovalLineLoading] = useState(false);
+  const [approvalLogs, setApprovalLogs] = useState<ApprovalLog[]>([]);
+  const [approvalSnapshot, setApprovalSnapshot] = useState<ApprovalStatus | null>(null);
   // 全局月份：所有模块共用，切换不重置
   const currentPeriod = useStore(s => s.currentPeriod);
   const setCurrentPeriod = useStore(s => s.setCurrentPeriod);
@@ -108,6 +132,55 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     localStorage.removeItem('supabase_token');
     navigate('/login');
   };
+
+  // ====== 审批线 ======
+  // 加载当前月份的全部审批记录 + 三个模块的实时状态
+  const loadApprovalLine = async () => {
+    setApprovalLineLoading(true);
+    try {
+      const [logs, status] = await Promise.all([
+        fetchApprovalLogs(currentPeriod),
+        fetchApprovalStatus(currentPeriod),
+      ]);
+      setApprovalLogs(logs);
+      setApprovalSnapshot(status);
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || '加载审批线失败');
+      setApprovalLogs([]);
+      setApprovalSnapshot(null);
+    } finally {
+      setApprovalLineLoading(false);
+    }
+  };
+
+  const openApprovalLine = () => {
+    setApprovalLineOpen(true);
+    loadApprovalLine();
+  };
+
+  // 弹窗开着时切换月份，自动换成对应月份的记录
+  useEffect(() => {
+    if (approvalLineOpen) loadApprovalLine();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPeriod]);
+
+  // 模块当前状态：已锁定=已审批，已提交=待审批，其余=未提交
+  const moduleStatus = (m: ApprovalModule): { label: string; color: string } => {
+    if (!approvalSnapshot) return { label: '—', color: 'default' };
+    const locked = m === 'roster' ? approvalSnapshot.rosterLocked
+      : m === 'attendance' ? approvalSnapshot.attendanceLocked
+      : approvalSnapshot.payrollLocked;
+    const submitted = m === 'roster' ? approvalSnapshot.rosterSubmitted
+      : m === 'attendance' ? approvalSnapshot.attendanceSubmitted
+      : approvalSnapshot.payrollSubmitted;
+    if (locked) return { label: '已审批', color: 'green' };
+    if (submitted) return { label: '待审批', color: 'orange' };
+    return { label: '未提交', color: 'default' };
+  };
+
+  // 记录按时间倒序，第一条即该模块最近一次审批
+  const latestApprove = (m: ApprovalModule) =>
+    approvalLogs.find(l => l.module === m && l.action === 'approve');
 
   // 全局刷新：只刷新【顶部选择的月份】，按 考勤→社保→个税→实习生→薪资 重算
   const handleGlobalRefresh = async () => {
@@ -218,13 +291,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {/* 全局月份选择器：切换后所有模块共用该月份，切模块不重置 */}
           <span style={{ color: '#666' }}>月份：</span>
           <Input type="month" value={currentPeriod} onChange={e => setCurrentPeriod(e.target.value)} style={{ width: 150 }} />
+          <Button icon={<ApartmentOutlined />} onClick={openApprovalLine}>
+            审批线
+          </Button>
           <Button
             type="primary"
             icon={<SyncOutlined />}
             onClick={handleGlobalRefresh}
             loading={refreshing}
-            disabled={payrollLockedForPeriod}
-            title={payrollLockedForPeriod ? '该月薪资已审批通过并冻结，不能全局刷新' : ''}
+            disabled={payrollLockedForPeriod || !canEdit()}
+            title={
+              !canEdit() ? '查阅角色只有查看权限'
+                : payrollLockedForPeriod ? '该月薪资已审批通过并冻结，不能全局刷新'
+                : ''
+            }
           >
             全局刷新
           </Button>
@@ -276,6 +356,83 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             </div>
           ))}
         </div>
+      </Modal>
+
+      {/* 审批线弹窗：当月三个模块的审批人 + 完整操作记录（含解冻） */}
+      <Modal
+        title={`审批线（${currentPeriod}）`}
+        open={approvalLineOpen}
+        onCancel={() => setApprovalLineOpen(false)}
+        footer={<Button onClick={() => setApprovalLineOpen(false)}>关闭</Button>}
+        width={860}
+      >
+        <Typography.Title level={5} style={{ marginTop: 0 }}>本月审批</Typography.Title>
+        <Table
+          size="small"
+          rowKey="module"
+          pagination={false}
+          loading={approvalLineLoading}
+          dataSource={APPROVAL_MODULES.map(m => ({ module: m }))}
+          columns={[
+            {
+              title: '模块', dataIndex: 'module', width: 140,
+              render: (m: ApprovalModule) => MODULE_LABELS[m],
+            },
+            {
+              title: '状态', width: 100,
+              render: (_: any, r: any) => {
+                const s = moduleStatus(r.module);
+                return <Tag color={s.color}>{s.label}</Tag>;
+              },
+            },
+            {
+              title: '审批人',
+              render: (_: any, r: any) => latestApprove(r.module)?.actor_email || '—',
+            },
+            {
+              title: '审批时间', width: 170,
+              render: (_: any, r: any) => {
+                const a = latestApprove(r.module);
+                return a ? formatTime(a.created_at) : '—';
+              },
+            },
+          ]}
+        />
+
+        <Typography.Title level={5} style={{ marginTop: 20 }}>操作记录</Typography.Title>
+        <Table
+          size="small"
+          rowKey="id"
+          pagination={false}
+          loading={approvalLineLoading}
+          dataSource={approvalLogs}
+          locale={{ emptyText: '本月暂无审批记录' }}
+          scroll={{ y: 280 }}
+          columns={[
+            {
+              title: '时间', dataIndex: 'created_at', width: 150,
+              render: (v: string) => formatTime(v),
+            },
+            {
+              title: '模块', dataIndex: 'module', width: 110,
+              render: (m: ApprovalModule) => MODULE_LABELS[m],
+            },
+            {
+              title: '动作', dataIndex: 'action', width: 100,
+              render: (a: keyof typeof ACTION_LABELS) => (
+                <Tag color={ACTION_COLORS[a]}>{ACTION_LABELS[a]}</Tag>
+              ),
+            },
+            {
+              title: '操作人',
+              render: (_: any, r: ApprovalLog) => r.actor_email || '—',
+            },
+            {
+              title: '备注', dataIndex: 'note',
+              render: (v: string | null) => v || '—',
+            },
+          ]}
+        />
       </Modal>
     </Layout>
   );
