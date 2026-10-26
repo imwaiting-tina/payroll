@@ -898,9 +898,9 @@ const Dashboard: React.FC = () => {
           onClick: async ({ key }) => {
             if (key === 'pdf') {
               const companyRows = buildSummaryByGroup('pay_company');
-              const deptRows = buildSummaryByGroup('department');
+              const costRows = buildSummaryByGroup('cost_center');
               try {
-                await exportSummaryPdf(companyRows, deptRows, period);
+                await exportSummaryPdf(companyRows, costRows, period);
               } catch (e: any) {
                 message.error(e?.message || 'PDF 导出失败');
               }

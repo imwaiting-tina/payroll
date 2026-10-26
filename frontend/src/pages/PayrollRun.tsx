@@ -546,7 +546,7 @@ const PayrollPage: React.FC = () => {
       // 绩效&佣金 与「附加薪酬」页保持一致（8项）：商办佣金 + 绩效 + 公寓佣金 + 人才系KPI + 防暑降温费 + 津贴 + 保安奖金 + 保洁奖金
       const perfComm = (add: any) => (add.office_comm || 0) + (add.performance_pay || 0) + (add.apartment_comm || 0) + (add.talent_kpi || 0) + (add.heat_allowance || 0) + (add.other_allowance || 0) + (add.security_bonus || 0) + (add.cleaning_bonus || 0);
 
-      const buildRows = (key: 'pay_company' | 'department'): SummaryRow[] => {
+      const buildRows = (key: 'pay_company' | 'cost_center'): SummaryRow[] => {
         const by: Record<string, SummaryRow> = {};
         const activeHashSet = new Set(activeEmps.map((e: any) => e.unique_hash));
         activeEmps.forEach((e: any) => {
@@ -576,8 +576,8 @@ const PayrollPage: React.FC = () => {
       };
 
       const companyRows = buildRows('pay_company');
-      const deptRows = buildRows('department');
-      await exportSummaryPdf(companyRows, deptRows, period);
+      const costRows = buildRows('cost_center');
+      await exportSummaryPdf(companyRows, costRows, period);
       setSummaryModal(false);
       message.success('Summary PDF 已下载');
     } catch (e: any) {
@@ -735,7 +735,7 @@ const PayrollPage: React.FC = () => {
         okText="下载 Summary PDF"
         cancelText="暂不下载"
       >
-        <div>薪资审批已通过，当月数据已冻结。是否下载「数据统计 Summary」PDF（含按公司、按部门汇总）？</div>
+        <div>薪资审批已通过，当月数据已冻结。是否下载「数据统计 Summary」PDF（含按公司、按成本中心汇总）？</div>
       </Modal>
 
       {/* 工资条详情抽屉 */}

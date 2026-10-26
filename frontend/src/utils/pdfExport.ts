@@ -1,6 +1,6 @@
 /**
  * 数据统计 Summary 导出 PDF
- * 生成一个 PDF 文件，包含两页：按公司汇总 + 按部门汇总
+ * 生成一个 PDF 文件，包含两页：按公司汇总 + 按成本中心汇总
  *
  * 中文乱码解决方案：不用 jsPDF 的字体（对 CFF 字体支持差），
  * 而是用 html2canvas 把表格渲染成图片，再放进 PDF —— 浏览器自己画中文，永不乱码。
@@ -120,7 +120,7 @@ async function tableToImage(doc: jsPDF, html: string): Promise<{ imgData: string
   }
 }
 
-export async function exportSummaryPdf(companyRows: SummaryRow[], deptRows: SummaryRow[], period: string) {
+export async function exportSummaryPdf(companyRows: SummaryRow[], costRows: SummaryRow[], period: string) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const subtitle = `数据期间：${period}　·　金额单位：元`;
   const pageW = doc.internal.pageSize.getWidth();
@@ -141,9 +141,9 @@ export async function exportSummaryPdf(companyRows: SummaryRow[], deptRows: Summ
     doc.addImage(img1.imgData, 'PNG', x, y, img1.width, img1.height);
   }
 
-  // 第二页：按部门
+  // 第二页：按成本中心
   doc.addPage();
-  const img2 = await tableToImage(doc, buildTableHtml('数据统计 Summary — 按部门', subtitle, '成本中心/部门', deptRows));
+  const img2 = await tableToImage(doc, buildTableHtml('数据统计 Summary — 按成本中心', subtitle, '成本中心', costRows));
   let x2 = (pageW - img2.width) / 2;
   if (img2.height > pageH - margin * 2) {
     const scale = (pageH - margin * 2) / img2.height;
