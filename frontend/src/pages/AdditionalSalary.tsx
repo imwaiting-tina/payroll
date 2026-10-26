@@ -214,6 +214,15 @@ const AdditionalSalaryPage: React.FC = () => {
     }
   };
 
+  // 汇总卡片（随筛选变化）
+  const summary = {
+    count: records.length,
+    entered: records.filter((r: any) => Number(r.additional_total) !== 0).length,
+    total: records.reduce((s: number, r: any) => s + Number(r.additional_total || 0), 0),
+    perfComm: records.reduce((s: number, r: any) => s + Number(r.perf_comm_total || 0), 0),
+    serviceFee: records.reduce((s: number, r: any) => s + Number(r.service_fee || 0), 0),
+  };
+
   const columns: any[] = [
     { title: withSource('姓名', '花名册同步'), dataIndex: 'employee_name', key: 'name', width: 90, fixed: 'left' },
     { title: withSource('发薪公司', '花名册同步'), dataIndex: 'pay_company', key: 'co', width: 130, ellipsis: true, fixed: 'left' },
@@ -276,6 +285,17 @@ const AdditionalSalaryPage: React.FC = () => {
           <Select placeholder="数据状态" allowClear value={fDataStatus} onChange={setFDataStatus} style={{ width: 120 }}
             options={['已锁定', '正常', '未录入'].map(s => ({ value: s, label: s }))} />
           <Input prefix={<SearchOutlined />} placeholder="搜索姓名" value={keyword} onChange={e => setKeyword(e.target.value)} style={{ width: 140 }} allowClear />
+        </Space>
+      </Card>
+
+      {/* 汇总卡片 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space size="large" wrap>
+          <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
+          <span>已录入人数：<strong>{summary.entered ? summary.entered : '—'}</strong></span>
+          <span>附加薪酬合计：<strong>{fmtMoney(summary.total)}</strong></span>
+          <span>绩效&佣金合计：<strong>{fmtMoney(summary.perfComm)}</strong></span>
+          <span>服务费合计：<strong>{fmtMoney(summary.serviceFee)}</strong></span>
         </Space>
       </Card>
 

@@ -242,6 +242,13 @@ const EmployeeWelfare: React.FC = () => {
       return true;
     });
 
+  // 汇总卡片（随筛选变化）
+  const summary = {
+    count: filteredRecords.length,
+    personal: filteredRecords.reduce((s: number, r: any) => s + Number(r.personal_total_with_adj || 0), 0),
+    company: filteredRecords.reduce((s: number, r: any) => s + Number(r.company_total_with_adj || 0), 0),
+  };
+
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
@@ -698,6 +705,16 @@ const EmployeeWelfare: React.FC = () => {
             options={['缴存', '不缴存'].map(s => ({ value: s, label: s }))} />
           <Select placeholder="数据状态" allowClear value={fDataStatus} onChange={setFDataStatus} style={{ width: 140 }}
             options={['正常', '社保基数缺失', '公积金基数缺失', '补充公积金基数缺失', '不缴纳原因缺失', '含调整', '调整原因缺失', '调整期间缺失', '未录入'].map(s => ({ value: s, label: s }))} />
+        </Space>
+      </Card>
+
+      {/* 汇总卡片 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space size="large" wrap>
+          <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
+          <span>个人合计：<strong>{fmtMoney(summary.personal)}</strong></span>
+          <span>公司合计：<strong>{fmtMoney(summary.company)}</strong></span>
+          <span>个人+公司合计：<strong>{fmtMoney(summary.personal + summary.company)}</strong></span>
         </Space>
       </Card>
 

@@ -604,6 +604,15 @@ const PayrollPage: React.FC = () => {
     }
   };
 
+  // 汇总卡片（随筛选变化）
+  const summary = {
+    count: records.length,
+    wageSubtotal: records.reduce((s: number, r: any) => s + Number(r.wage_subtotal || 0), 0),
+    tax: records.reduce((s: number, r: any) => s + Number(r.monthly_tax || 0), 0),
+    netPay: records.reduce((s: number, r: any) => s + Number(r.net_pay || 0), 0),
+    totalCost: records.reduce((s: number, r: any) => s + Number(r.total_cost || 0), 0),
+  };
+
   const columns: any[] = [
     { title: withSource('姓名', '花名册同步'), dataIndex: 'employee_name', key: 'name', width: 90, fixed: 'left' },
     { title: withSource('发薪公司', '花名册同步'), dataIndex: 'pay_company', key: 'co', width: 130, ellipsis: true, fixed: 'left' },
@@ -680,6 +689,17 @@ const PayrollPage: React.FC = () => {
           <Input placeholder="成本中心" value={fCostCenter} onChange={e => setFCostCenter(e.target.value)} style={{ width: 120 }} allowClear />
           <Input placeholder="部门" value={fDepartment} onChange={e => setFDepartment(e.target.value)} style={{ width: 120 }} allowClear />
           <Input prefix={<SearchOutlined />} placeholder="搜索姓名" value={keyword} onChange={e => setKeyword(e.target.value)} style={{ width: 140 }} allowClear />
+        </Space>
+      </Card>
+
+      {/* 汇总卡片 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space size="large" wrap>
+          <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
+          <span>薪资小计合计：<strong>{fmtMoney(summary.wageSubtotal)}</strong></span>
+          <span>个税合计：<strong style={{ color: '#e74c3c' }}>{fmtMoney(summary.tax)}</strong></span>
+          <span>实发合计：<strong style={{ color: '#27ae60' }}>{fmtMoney(summary.netPay)}</strong></span>
+          <span>企业人力成本合计：<strong>{fmtMoney(summary.totalCost)}</strong></span>
         </Space>
       </Card>
 

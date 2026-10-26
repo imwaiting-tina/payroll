@@ -243,6 +243,13 @@ const TaxMonthlyCalcPage: React.FC = () => {
     return true;
   });
 
+  // 汇总卡片（随筛选变化）
+  const summary = {
+    count: filteredRecords.length,
+    income: filteredRecords.reduce((s: number, r: any) => s + Number(r.current_taxable_income || 0), 0),
+    tax: filteredRecords.reduce((s: number, r: any) => s + Number(r.monthly_tax || 0), 0),
+  };
+
   // 计算上一个月
   function prevPeriod(p: string): string {
     const [y, m] = p.split('-').map(Number);
@@ -398,6 +405,15 @@ const TaxMonthlyCalcPage: React.FC = () => {
         <Button icon={<LinkOutlined />} onClick={handleSync} disabled={readOnly || locked}>同步到薪酬板块</Button>
         <Button icon={<DownloadOutlined />} onClick={() => exportXlsx(EXPORT_DEF, filteredRecords, period)}>导出</Button>
       </Space>
+      {/* 汇总卡片 */}
+      <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
+        <Space size="large" wrap>
+          <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
+          <span>本期应税收入合计：<strong>{fmtMoney(summary.income)}</strong></span>
+          <span>当月个税合计：<strong style={{ color: '#e74c3c' }}>{fmtMoney(summary.tax)}</strong></span>
+        </Space>
+      </div>
+
       <FitHeightTable columns={columns} dataSource={filteredRecords} loading={loading} scroll={{ x: 2000 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
     </Card>
   );
