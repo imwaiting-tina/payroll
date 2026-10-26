@@ -289,8 +289,8 @@ const AdditionalSalaryPage: React.FC = () => {
       </Card>
 
       {/* 汇总卡片 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size="large" wrap>
+      <Card size="small" style={{ marginBottom: 8, fontSize: 12 }}>
+        <Space size={16} wrap>
           <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
           <span>已录入人数：<strong>{summary.entered ? summary.entered : '—'}</strong></span>
           <span>附加薪酬合计：<strong>{fmtMoney(summary.total)}</strong></span>

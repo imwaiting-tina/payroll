@@ -406,8 +406,8 @@ const TaxMonthlyCalcPage: React.FC = () => {
         <Button icon={<DownloadOutlined />} onClick={() => exportXlsx(EXPORT_DEF, filteredRecords, period)}>导出</Button>
       </Space>
       {/* 汇总卡片 */}
-      <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
-        <Space size="large" wrap>
+      <div style={{ marginBottom: 8, padding: '8px 12px', background: '#fafafa', borderRadius: 6, fontSize: 12 }}>
+        <Space size={16} wrap>
           <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
           <span>本期应税收入合计：<strong>{fmtMoney(summary.income)}</strong></span>
           <span>当月个税合计：<strong style={{ color: '#e74c3c' }}>{fmtMoney(summary.tax)}</strong></span>

@@ -709,8 +709,8 @@ const EmployeeWelfare: React.FC = () => {
       </Card>
 
       {/* 汇总卡片 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size="large" wrap>
+      <Card size="small" style={{ marginBottom: 8, fontSize: 12 }}>
+        <Space size={16} wrap>
           <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
           <span>个人合计：<strong>{fmtMoney(summary.personal)}</strong></span>
           <span>公司合计：<strong>{fmtMoney(summary.company)}</strong></span>

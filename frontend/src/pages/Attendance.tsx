@@ -943,8 +943,8 @@ const AttendancePage: React.FC = () => {
       </Card>
 
       {/* 汇总卡片 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size="large" wrap>
+      <Card size="small" style={{ marginBottom: 8, fontSize: 12 }}>
+        <Space size={16} wrap>
           <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
           <span>参与考勤人数：<strong>{summary.attendanceCount ? summary.attendanceCount : '—'}</strong></span>
           <span>病假天数：<strong>{summary.sickDays ? summary.sickDays : '—'}</strong></span>

@@ -632,8 +632,8 @@ const EmployeesPage: React.FC = () => {
       </Card>
 
       {/* 汇总卡片 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size="large" wrap>
+      <Card size="small" style={{ marginBottom: 8, fontSize: 12 }}>
+        <Space size={16} wrap>
           <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
           <span>在职人数：<strong>{summary.active ? summary.active : '—'}</strong></span>
           <span>离职人数：<strong>{summary.resigned ? summary.resigned : '—'}</strong></span>
