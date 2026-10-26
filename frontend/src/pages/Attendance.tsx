@@ -16,6 +16,7 @@ import { useStore } from '../stores/appStore';
 import { ensureRoster } from '../utils/roster';
 import { prevPeriod } from '../utils/format';
 import { canSubmit, canApprove, canEdit } from '../utils/permissions';
+import { confirmImport } from '../utils/importGuard';
 import { logApproval } from '../utils/approvalLog';
 import { fetchApprovalStatus, getAttendanceGate } from '../utils/approvalStatus';
 import RawExcelModal from '../components/RawExcelModal';
@@ -521,6 +522,9 @@ const AttendancePage: React.FC = () => {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
       if (data.length === 0) { message.info('未找到有效数据'); return; }
+
+      // 导入前校验月份：文件名月份与顶部所选月份冲突就拦下，否则弹确认框
+      if (!(await confirmImport({ moduleLabel: '考勤', period, file, rowCount: data.length, errorCount: import_errors.length }))) return;
 
       const validPayDays = attRules.pay_days_options.length ? attRules.pay_days_options : [21.75, 26, 30];
       // 天数字段：Excel 留空一律按 0 处理，确保能把旧值清掉

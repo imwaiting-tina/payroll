@@ -11,6 +11,7 @@ import { withSource } from '../components/SourceTag';
 import FitHeightTable from '../components/FitHeightTable';
 import { useStore } from '../stores/appStore';
 import { canSubmit, canApprove, canEdit } from '../utils/permissions';
+import { confirmImport } from '../utils/importGuard';
 import { logApproval } from '../utils/approvalLog';
 import { fetchApprovalStatus } from '../utils/approvalStatus';
 import { ensureRoster } from '../utils/roster';
@@ -278,6 +279,9 @@ const EmployeesPage: React.FC = () => {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
       if (data.length === 0) { message.info('未找到有效数据'); return; }
+
+      // 导入前校验月份：文件名月份与顶部所选月份冲突就拦下，否则弹确认框
+      if (!(await confirmImport({ moduleLabel: '花名册', period, file, rowCount: data.length, errorCount: import_errors.length }))) return;
 
       let failed = 0;
       const failReasons: string[] = [];

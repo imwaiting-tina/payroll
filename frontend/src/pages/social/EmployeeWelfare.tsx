@@ -20,6 +20,7 @@ import dayjs from 'dayjs';
 import { useStore } from '../../stores/appStore';
 import { ensureRoster } from '../../utils/roster';
 import { canEdit } from '../../utils/permissions';
+import { confirmImport } from '../../utils/importGuard';
 
 const defaultPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
@@ -544,6 +545,9 @@ const EmployeeWelfare: React.FC = () => {
       const { data, import_errors } = await importXlsx(EXPORT_DEF, file);
       if (import_errors.length > 0) message.warning(`有 ${import_errors.length} 行数据存在问题`);
       if (data.length === 0) { message.info('未找到有效数据'); return; }
+
+      // 导入前校验月份：文件名月份与顶部所选月份冲突就拦下，否则弹确认框
+      if (!(await confirmImport({ moduleLabel: '社保/福利', period, file, rowCount: data.length, errorCount: import_errors.length }))) return;
 
       let failed = 0;
       const failReasons: string[] = [];
