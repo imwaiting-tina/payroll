@@ -516,6 +516,14 @@ const EmployeesPage: React.FC = () => {
   const handleReject = () => setApproveConfirm({ type: 'reject' });
 
   // ====== 表格列（固定顺序） ======
+  // 汇总卡片（随筛选变化）
+  const summary = {
+    count: employees.length,
+    active: employees.filter(e => e.status === '在职').length,
+    resigned: employees.filter(e => e.status === '离职').length,
+    companies: new Set(employees.map(e => e.pay_company).filter(Boolean)).size,
+  };
+
   const columns: any[] = [
     { title: withSource('姓名', '导入'), dataIndex: 'name', key: 'name', width: 100, fixed: 'left' },
     {
@@ -620,6 +628,16 @@ const EmployeesPage: React.FC = () => {
             options={TAX_METHODS} />
           <RangePicker value={fEntryRange} onChange={(v) => setFEntryRange(v as any)} placeholder={['入职起', '入职止']} />
           <RangePicker value={fLeaveRange} onChange={(v) => setFLeaveRange(v as any)} placeholder={['离职起', '离职止']} />
+        </Space>
+      </Card>
+
+      {/* 汇总卡片 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space size="large" wrap>
+          <span>员工人数：<strong>{summary.count ? summary.count : '—'}</strong></span>
+          <span>在职人数：<strong>{summary.active ? summary.active : '—'}</strong></span>
+          <span>离职人数：<strong>{summary.resigned ? summary.resigned : '—'}</strong></span>
+          <span>发薪公司数：<strong>{summary.companies ? summary.companies : '—'}</strong></span>
         </Space>
       </Card>
 
