@@ -78,8 +78,8 @@ const TaxPage: React.FC = () => {
   return (
     <div>
       {/* 各税种汇总（随所选月份变化，计算后可点刷新） */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size="large" wrap>
+      <Card size="small" style={{ marginBottom: 8, fontSize: 12 }}>
+        <Space size={16} wrap>
           {TAX_TYPES.map(t => {
             const item = summary[t.value];
             return (
