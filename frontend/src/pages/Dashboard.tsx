@@ -914,7 +914,7 @@ const Dashboard: React.FC = () => {
         <Tabs activeKey={summaryTab} onChange={(k) => { setSummaryTab(k as 'dept' | 'company'); }}
           items={[
             { key: 'company', label: '按公司' },
-            { key: 'dept', label: '按部门' },
+            { key: 'dept', label: '按成本中心' },
           ]} />
         <div style={{ overflowX: 'auto' }}>
           <Table
