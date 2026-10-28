@@ -22,6 +22,18 @@ const PRECISION_OPTIONS = [0, 1, 2].map(p => ({ value: p, label: `${p} 位` }));
 
 const rateInput = (step = 0.0001) => ({ step, min: 0, max: 1, style: { width: 110 } });
 
+// 各险种最低基数 + 对应的开始日期
+const BASE_MIN_FIELDS = [
+  { key: 'pension_base_min', dateKey: 'pension_base_min_start', label: '养老' },
+  { key: 'medical_base_min', dateKey: 'medical_base_min_start', label: '医疗' },
+  { key: 'unemployment_base_min', dateKey: 'unemployment_base_min_start', label: '失业' },
+  { key: 'injury_base_min', dateKey: 'injury_base_min_start', label: '工伤' },
+  { key: 'maternity_base_min', dateKey: 'maternity_base_min_start', label: '生育' },
+] as const;
+
+// 保存时需要转成 YYYY-MM-DD 的日期字段
+const DATE_FIELDS = ['effective_date', 'expiry_date', ...BASE_MIN_FIELDS.map(f => f.dateKey)];
+
 // 金额格式化：固定两位小数
 const fmtMoney = (v: any) => {
   if (v === undefined || v === null || v === '' || Number(v) === 0) return '—';
@@ -44,10 +56,15 @@ const SOCIAL_EXPORT_DEF: ExportDef = {
     { key: 'injury_enabled', label: '工伤缴纳开关' },
     { key: 'maternity_enabled', label: '生育缴纳开关' },
     { key: 'pension_base_min', label: '养老最低基数' },
+    { key: 'pension_base_min_start', label: '养老最低基数开始日期' },
     { key: 'medical_base_min', label: '医疗最低基数' },
+    { key: 'medical_base_min_start', label: '医疗最低基数开始日期' },
     { key: 'unemployment_base_min', label: '失业最低基数' },
+    { key: 'unemployment_base_min_start', label: '失业最低基数开始日期' },
     { key: 'injury_base_min', label: '工伤最低基数' },
+    { key: 'injury_base_min_start', label: '工伤最低基数开始日期' },
     { key: 'maternity_base_min', label: '生育最低基数' },
+    { key: 'maternity_base_min_start', label: '生育最低基数开始日期' },
     { key: 'pension_rate_p', label: '个人养老比例' },
     { key: 'medical_rate_p', label: '个人医疗比例' },
     { key: 'medical_fixed_p', label: '个人医疗固定附加' },
@@ -128,27 +145,31 @@ const WelfareSetPage: React.FC = () => {
 
   const openEdit = (record: any) => {
     setEditing(record);
-    form.setFieldsValue({
-      ...record,
-      effective_date: record.effective_date ? dayjs(record.effective_date) : undefined,
-      expiry_date: record.expiry_date ? dayjs(record.expiry_date) : undefined,
-    });
+    // 日期字段统一转成 dayjs，供 DatePicker 使用
+    const dateValues: Record<string, any> = {};
+    DATE_FIELDS.forEach((k) => { dateValues[k] = record[k] ? dayjs(record[k]) : undefined; });
+    form.setFieldsValue({ ...record, ...dateValues });
     setModalOpen(true);
   };
 
   const handleSave = async () => {
     const values = await form.validateFields();
     const table = activeTab === 'social' ? 'social_welfare_sets' : 'housing_fund_sets';
+    // 日期统一存 YYYY-MM-DD，避免 dayjs 序列化成带时区的 ISO 字符串
+    // 公积金福利套没有险种最低基数日期字段，不能把空值带上
+    const dateFields = activeTab === 'social' ? DATE_FIELDS : ['effective_date', 'expiry_date'];
+    const payload = { ...values };
+    dateFields.forEach((k) => { payload[k] = payload[k] ? dayjs(payload[k]).format('YYYY-MM-DD') : null; });
     try {
       if (editing) {
         if (editing.is_builtin) {
           message.error(`${editing.code} 为系统内置福利套，不允许修改`);
           return;
         }
-        await api.patch(`/${table}?id=eq.${editing.id}`, values);
+        await api.patch(`/${table}?id=eq.${editing.id}`, payload);
         message.success('已更新');
       } else {
-        await api.post(`/${table}`, values);
+        await api.post(`/${table}`, payload);
         message.success('已创建');
       }
       setModalOpen(false);
@@ -255,6 +276,15 @@ const WelfareSetPage: React.FC = () => {
     { title: withSource('名称', '导入'), dataIndex: 'name', key: 'name', width: 130 },
     { title: '来源', dataIndex: 'is_builtin', key: 'src', width: 80, render: (v: boolean) => v ? <Tag color="blue">内置</Tag> : <Tag>自定义</Tag> },
     { title: withSource('地区', '导入'), dataIndex: 'region', key: 'region', width: 70 },
+    {
+      title: withSource('险种最低基数（开始日期）', '导入'), key: 'baseMins', width: 260,
+      render: (_: any, r: SocialWelfareSet) => {
+        const parts = BASE_MIN_FIELDS
+          .filter(f => r[f.key] != null)
+          .map(f => `${f.label} ${Number(r[f.key]).toLocaleString('zh-CN')}${r[f.dateKey] ? `（${r[f.dateKey]} 起）` : ''}`);
+        return parts.length ? <span style={{ fontSize: 12 }}>{parts.join('；')}</span> : '—';
+      },
+    },
     { title: withSource('个人费率', '导入'), key: 'pr', width: 180, render: (_: any, r: SocialWelfareSet) =>
       `${(r.pension_rate_p * 100).toFixed(1)}% / ${(r.medical_rate_p * 100).toFixed(1)}% / ${(r.unemployment_rate_p * 100).toFixed(1)}%` },
     { title: withSource('公司费率', '导入'), key: 'cr', width: 200, render: (_: any, r: SocialWelfareSet) =>
@@ -339,7 +369,7 @@ const WelfareSetPage: React.FC = () => {
       />
 
       {activeTab === 'social' ? (
-        <Table columns={socialColumns} dataSource={socialSets} loading={loading} scroll={{ x: 1200, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
+        <Table columns={socialColumns} dataSource={socialSets} loading={loading} scroll={{ x: 1500, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
       ) : (
         <Table columns={housingColumns} dataSource={housingSets} loading={loading} scroll={{ x: 1200, y: 480 }} size="small" pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [10, 20, 30, 50, 100], showTotal: t => `共 ${t} 条` }} />
       )}
@@ -399,12 +429,17 @@ const WelfareSetPage: React.FC = () => {
                 </Space>
               </Card>
               <Card title="各险种最低基数（个人与公司一致）" size="small" style={{ marginBottom: 12 }}>
-                <Space wrap>
-                  <Form.Item name="pension_base_min" label="养老最低基数"><InputNumber style={{ width: 140 }} min={0} /></Form.Item>
-                  <Form.Item name="medical_base_min" label="医疗最低基数"><InputNumber style={{ width: 140 }} min={0} /></Form.Item>
-                  <Form.Item name="unemployment_base_min" label="失业最低基数"><InputNumber style={{ width: 140 }} min={0} /></Form.Item>
-                  <Form.Item name="injury_base_min" label="工伤最低基数"><InputNumber style={{ width: 140 }} min={0} /></Form.Item>
-                  <Form.Item name="maternity_base_min" label="生育最低基数"><InputNumber style={{ width: 140 }} min={0} /></Form.Item>
+                <Space size={[24, 0]} wrap>
+                  {BASE_MIN_FIELDS.map(({ key, dateKey, label }) => (
+                    <div key={key} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <Form.Item name={key} label={`${label}最低基数`}>
+                        <InputNumber style={{ width: 120 }} min={0} />
+                      </Form.Item>
+                      <Form.Item name={dateKey} label="开始日期">
+                        <DatePicker style={{ width: 140 }} />
+                      </Form.Item>
+                    </div>
+                  ))}
                 </Space>
               </Card>
               <Card title="个人费率" size="small" style={{ marginBottom: 12 }}>

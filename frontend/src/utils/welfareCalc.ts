@@ -24,6 +24,12 @@ export interface SocialWelfareSet {
   unemployment_base_min?: number | null;
   injury_base_min?: number | null;
   maternity_base_min?: number | null;
+  // 各险种最低基数的开始日期（仅记录，不参与计算）
+  pension_base_min_start?: string | null;
+  medical_base_min_start?: string | null;
+  unemployment_base_min_start?: string | null;
+  injury_base_min_start?: string | null;
+  maternity_base_min_start?: string | null;
   pension_rate_p: number;
   medical_rate_p: number;
   medical_fixed_p: number;
