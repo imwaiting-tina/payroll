@@ -5,11 +5,11 @@ import {
 } from 'antd';
 import { PlusOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import api, { bulkUpsert } from '../../api/client';
-import type { SocialWelfareSet, HousingFundSet } from '../../types';
+import type { SocialWelfareSet, HousingFundSet, SocialBaseMinHistory } from '../../types';
 import { calcSocial, calcHousingFund } from '../../utils/welfareCalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 
 const REGIONS = ['上海', '北京', '天津', '深圳', '南京', '香港'];
 const ROUND_OPTIONS = [
@@ -22,17 +22,29 @@ const PRECISION_OPTIONS = [0, 1, 2].map(p => ({ value: p, label: `${p} 位` }));
 
 const rateInput = (step = 0.0001) => ({ step, min: 0, max: 1, style: { width: 110 } });
 
-// 各险种最低基数 + 对应的开始日期
+// 各险种最低基数（福利套上的默认标准）
 const BASE_MIN_FIELDS = [
-  { key: 'pension_base_min', dateKey: 'pension_base_min_start', label: '养老' },
-  { key: 'medical_base_min', dateKey: 'medical_base_min_start', label: '医疗' },
-  { key: 'unemployment_base_min', dateKey: 'unemployment_base_min_start', label: '失业' },
-  { key: 'injury_base_min', dateKey: 'injury_base_min_start', label: '工伤' },
-  { key: 'maternity_base_min', dateKey: 'maternity_base_min_start', label: '生育' },
+  { key: 'pension_base_min', label: '养老' },
+  { key: 'medical_base_min', label: '医疗' },
+  { key: 'unemployment_base_min', label: '失业' },
+  { key: 'injury_base_min', label: '工伤' },
+  { key: 'maternity_base_min', label: '生育' },
 ] as const;
 
+// 历史调整使用的险种键
+const INSURANCE_OPTIONS = [
+  { value: 'pension', label: '养老' },
+  { value: 'medical', label: '医疗' },
+  { value: 'unemployment', label: '失业' },
+  { value: 'injury', label: '工伤' },
+  { value: 'maternity', label: '生育' },
+];
+const INSURANCE_LABELS: Record<string, string> = Object.fromEntries(
+  INSURANCE_OPTIONS.map(o => [o.value, o.label]),
+);
+
 // 保存时需要转成 YYYY-MM-DD 的日期字段
-const DATE_FIELDS = ['effective_date', 'expiry_date', ...BASE_MIN_FIELDS.map(f => f.dateKey)];
+const DATE_FIELDS = ['effective_date', 'expiry_date'];
 
 // 金额格式化：固定两位小数
 const fmtMoney = (v: any) => {
@@ -56,15 +68,10 @@ const SOCIAL_EXPORT_DEF: ExportDef = {
     { key: 'injury_enabled', label: '工伤缴纳开关' },
     { key: 'maternity_enabled', label: '生育缴纳开关' },
     { key: 'pension_base_min', label: '养老最低基数' },
-    { key: 'pension_base_min_start', label: '养老最低基数开始日期' },
     { key: 'medical_base_min', label: '医疗最低基数' },
-    { key: 'medical_base_min_start', label: '医疗最低基数开始日期' },
     { key: 'unemployment_base_min', label: '失业最低基数' },
-    { key: 'unemployment_base_min_start', label: '失业最低基数开始日期' },
     { key: 'injury_base_min', label: '工伤最低基数' },
-    { key: 'injury_base_min_start', label: '工伤最低基数开始日期' },
     { key: 'maternity_base_min', label: '生育最低基数' },
-    { key: 'maternity_base_min_start', label: '生育最低基数开始日期' },
     { key: 'pension_rate_p', label: '个人养老比例' },
     { key: 'medical_rate_p', label: '个人医疗比例' },
     { key: 'medical_fixed_p', label: '个人医疗固定附加' },
@@ -112,24 +119,36 @@ const WelfareSetPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form] = Form.useForm();
+  // 各险种最低基数历史调整
+  const [baseMinHistory, setBaseMinHistory] = useState<SocialBaseMinHistory[]>([]);
+  const [historySaving, setHistorySaving] = useState(false);
+  const [hInsurance, setHInsurance] = useState<string>('pension');
+  const [hBase, setHBase] = useState<number | null>(null);
+  const [hStart, setHStart] = useState<Dayjs | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [sRes, hRes] = await Promise.all([
+      const [sRes, hRes, histRes] = await Promise.all([
         api.get('/social_welfare_sets?select=*&order=code'),
         api.get('/housing_fund_sets?select=*&order=code'),
+        // 迁移尚未执行时不影响福利套本身加载
+        api.get('/social_base_min_history?select=*').catch(() => ({ data: [] })),
       ]);
       setSocialSets(sRes.data.map((s: any) => ({ ...s, key: s.id })));
       setHousingSets(hRes.data.map((h: any) => ({ ...h, key: h.id })));
+      setBaseMinHistory(histRes.data);
     } catch { message.error('加载福利套失败'); }
     finally { setLoading(false); }
   };
 
   const openCreate = () => {
     setEditing(null);
+    setHBase(null);
+    setHStart(null);
+    setHInsurance('pension');
     form.resetFields();
     form.setFieldsValue({
       status: '启用',
@@ -145,6 +164,9 @@ const WelfareSetPage: React.FC = () => {
 
   const openEdit = (record: any) => {
     setEditing(record);
+    setHBase(null);
+    setHStart(null);
+    setHInsurance('pension');
     // 日期字段统一转成 dayjs，供 DatePicker 使用
     const dateValues: Record<string, any> = {};
     DATE_FIELDS.forEach((k) => { dateValues[k] = record[k] ? dayjs(record[k]) : undefined; });
@@ -152,14 +174,43 @@ const WelfareSetPage: React.FC = () => {
     setModalOpen(true);
   };
 
+  // 新增一条最低基数历史调整
+  const handleAddHistory = async () => {
+    if (!editing?.code) return;
+    if (hBase == null || !hStart) { message.warning('请填写最低基数和开始日期'); return; }
+    setHistorySaving(true);
+    try {
+      await bulkUpsert('social_base_min_history', [{
+        social_code: editing.code,
+        insurance: hInsurance,
+        base_min: hBase,
+        start_date: hStart.format('YYYY-MM-DD'),
+      }], 'social_code,insurance,start_date');
+      message.success('已添加历史调整');
+      setHBase(null);
+      setHStart(null);
+      await loadData();
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || '添加失败');
+    } finally {
+      setHistorySaving(false);
+    }
+  };
+
+  const handleDeleteHistory = async (id: number) => {
+    try {
+      await api.delete(`/social_base_min_history?id=eq.${id}`);
+      message.success('已删除');
+      await loadData();
+    } catch { message.error('删除失败'); }
+  };
+
   const handleSave = async () => {
     const values = await form.validateFields();
     const table = activeTab === 'social' ? 'social_welfare_sets' : 'housing_fund_sets';
     // 日期统一存 YYYY-MM-DD，避免 dayjs 序列化成带时区的 ISO 字符串
-    // 公积金福利套没有险种最低基数日期字段，不能把空值带上
-    const dateFields = activeTab === 'social' ? DATE_FIELDS : ['effective_date', 'expiry_date'];
     const payload = { ...values };
-    dateFields.forEach((k) => { payload[k] = payload[k] ? dayjs(payload[k]).format('YYYY-MM-DD') : null; });
+    DATE_FIELDS.forEach((k) => { payload[k] = payload[k] ? dayjs(payload[k]).format('YYYY-MM-DD') : null; });
     try {
       if (editing) {
         if (editing.is_builtin) {
@@ -277,12 +328,18 @@ const WelfareSetPage: React.FC = () => {
     { title: '来源', dataIndex: 'is_builtin', key: 'src', width: 80, render: (v: boolean) => v ? <Tag color="blue">内置</Tag> : <Tag>自定义</Tag> },
     { title: withSource('地区', '导入'), dataIndex: 'region', key: 'region', width: 70 },
     {
-      title: withSource('险种最低基数（开始日期）', '导入'), key: 'baseMins', width: 260,
+      title: withSource('险种最低基数（默认）', '导入'), key: 'baseMins', width: 260,
       render: (_: any, r: SocialWelfareSet) => {
         const parts = BASE_MIN_FIELDS
           .filter(f => r[f.key] != null)
-          .map(f => `${f.label} ${Number(r[f.key]).toLocaleString('zh-CN')}${r[f.dateKey] ? `（${r[f.dateKey]} 起）` : ''}`);
-        return parts.length ? <span style={{ fontSize: 12 }}>{parts.join('；')}</span> : '—';
+          .map(f => `${f.label} ${Number(r[f.key]).toLocaleString('zh-CN')}`);
+        const histCount = baseMinHistory.filter(h => h.social_code === r.code).length;
+        return (
+          <span style={{ fontSize: 12 }}>
+            {parts.length ? parts.join('；') : '—'}
+            {histCount > 0 && <Tag color="blue" style={{ marginLeft: 6 }}>历史 {histCount} 条</Tag>}
+          </span>
+        );
       },
     },
     { title: withSource('个人费率', '导入'), key: 'pr', width: 180, render: (_: any, r: SocialWelfareSet) =>
@@ -328,6 +385,13 @@ const WelfareSetPage: React.FC = () => {
       ),
     },
   ];
+
+  // 当前编辑福利套的最低基数历史调整（开始日期倒序）
+  const editingHistory = editing
+    ? baseMinHistory
+        .filter(h => h.social_code === editing.code)
+        .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
+    : [];
 
   return (
     <div>
@@ -428,19 +492,51 @@ const WelfareSetPage: React.FC = () => {
                   <Form.Item name="maternity_enabled" label="生育" valuePropName="checked"><Switch /></Form.Item>
                 </Space>
               </Card>
-              <Card title="各险种最低基数（个人与公司一致）" size="small" style={{ marginBottom: 12 }}>
-                <Space size={[24, 0]} wrap>
-                  {BASE_MIN_FIELDS.map(({ key, dateKey, label }) => (
-                    <div key={key} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                      <Form.Item name={key} label={`${label}最低基数`}>
-                        <InputNumber style={{ width: 120 }} min={0} />
-                      </Form.Item>
-                      <Form.Item name={dateKey} label="开始日期">
-                        <DatePicker style={{ width: 140 }} />
-                      </Form.Item>
-                    </div>
+              <Card title="各险种最低基数（默认标准）" size="small" style={{ marginBottom: 12 }}>
+                <Space wrap>
+                  {BASE_MIN_FIELDS.map(({ key, label }) => (
+                    <Form.Item key={key} name={key} label={`${label}最低基数`}>
+                      <InputNumber style={{ width: 140 }} min={0} />
+                    </Form.Item>
                   ))}
                 </Space>
+                <div style={{ color: '#888', fontSize: 12 }}>
+                  这里的数值用于历史调整开始之前的月份；下方可按开始日期添加调整，计算时取“开始月份 ≤ 当期月份”的最近一条。
+                </div>
+              </Card>
+              <Card title="最低基数历史调整（按开始月份生效）" size="small" style={{ marginBottom: 12 }}>
+                {!editing ? (
+                  <div style={{ color: '#888', fontSize: 12 }}>福利套保存后，可在这里添加各险种最低基数的历史调整。</div>
+                ) : (
+                  <>
+                    {!editing.is_builtin && (
+                      <Space wrap style={{ marginBottom: 12 }}>
+                        <Select value={hInsurance} onChange={setHInsurance} options={INSURANCE_OPTIONS} style={{ width: 100 }} />
+                        <InputNumber value={hBase} onChange={(v) => setHBase(v as number | null)} placeholder="最低基数" min={0} style={{ width: 130 }} />
+                        <DatePicker value={hStart} onChange={(v) => setHStart(v)} placeholder="开始日期" style={{ width: 150 }} />
+                        <Button type="primary" size="small" loading={historySaving} onClick={handleAddHistory}>添加</Button>
+                      </Space>
+                    )}
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={editingHistory}
+                      columns={[
+                        { title: '险种', dataIndex: 'insurance', key: 'ins', width: 90, render: (v: string) => INSURANCE_LABELS[v] || v },
+                        { title: '最低基数', dataIndex: 'base_min', key: 'base', width: 120, render: (v: number) => fmtMoney(v) },
+                        { title: '开始日期', dataIndex: 'start_date', key: 'start', width: 120 },
+                        ...(editing.is_builtin ? [] : [{
+                          title: '操作', key: 'act', width: 80,
+                          render: (_: any, h: SocialBaseMinHistory) => (
+                            <Button size="small" danger onClick={() => handleDeleteHistory(h.id)}>删除</Button>
+                          ),
+                        }]),
+                      ]}
+                      locale={{ emptyText: '暂无历史调整' }}
+                    />
+                  </>
+                )}
               </Card>
               <Card title="个人费率" size="small" style={{ marginBottom: 12 }}>
                 <Space wrap>

@@ -61,18 +61,12 @@ export interface SocialWelfareSet {
   unemployment_enabled: boolean;
   injury_enabled: boolean;
   maternity_enabled: boolean;
-  // 各险种最低基数（个人和公司一致）
+  // 各险种最低基数（个人和公司一致），作为历史调整开始之前的默认标准
   pension_base_min?: number | null;
   medical_base_min?: number | null;
   unemployment_base_min?: number | null;
   injury_base_min?: number | null;
   maternity_base_min?: number | null;
-  // 各险种最低基数的开始日期
-  pension_base_min_start?: string | null;
-  medical_base_min_start?: string | null;
-  unemployment_base_min_start?: string | null;
-  injury_base_min_start?: string | null;
-  maternity_base_min_start?: string | null;
   pension_rate_p: number;
   medical_rate_p: number;
   medical_fixed_p: number;
@@ -86,6 +80,17 @@ export interface SocialWelfareSet {
   rounding_precision: number;
   allow_override_round: boolean;
   remark?: string;
+}
+
+// ====== 各险种最低基数历史调整 ======
+export type SocialInsuranceKey = 'pension' | 'medical' | 'unemployment' | 'injury' | 'maternity';
+
+export interface SocialBaseMinHistory {
+  id: number;
+  social_code: string;
+  insurance: SocialInsuranceKey;
+  base_min: number;
+  start_date: string;   // YYYY-MM-DD，按月份生效
 }
 
 // ====== 公积金福利套 ======

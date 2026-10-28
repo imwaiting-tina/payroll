@@ -98,10 +98,12 @@ async function refreshAttendance(period: string): Promise<RefreshStepResult> {
 
 /** 2. 社保一键计算 */
 async function refreshSocial(period: string): Promise<RefreshStepResult> {
-  const [sRes, hRes, recRes] = await Promise.all([
+  const [sRes, hRes, recRes, histRes] = await Promise.all([
     api.get('/social_welfare_sets?select=*'),
     api.get('/housing_fund_sets?select=*'),
     api.get(`/employee_welfare_records?select=*&period=eq.${period}`),
+    // 迁移尚未执行时不影响其余数据的刷新
+    api.get('/social_base_min_history?select=*').catch(() => ({ data: [] })),
   ]);
   const sMap: Record<string, any> = {};
   sRes.data.forEach((s: any) => { sMap[s.code] = s; });
@@ -121,7 +123,7 @@ async function refreshSocial(period: string): Promise<RefreshStepResult> {
       const socialBase = Number(rec.social_base || 0);
       const housingBase = Number(rec.housing_base || 0);
       const suppBase = Number(rec.supp_base || housingBase);
-      const social = sSet.code === 'SI-00' ? null : calcSocial(sSet as any, socialBase);
+      const social = sSet.code === 'SI-00' ? null : calcSocial(sSet as any, socialBase, { period, history: histRes.data });
       const housing = hSet.code === 'HF-00' ? null : calcHousingFund(hSet as any, housingBase, suppBase, rec.supp_enabled);
 
       const psAdj = Number(rec.personal_social_adj || 0);

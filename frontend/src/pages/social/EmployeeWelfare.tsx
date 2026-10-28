@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Table, Button, Drawer, Form, Input, Select, Space, message, Card, InputNumber, Switch, Tag, Descriptions, DatePicker, Upload, Dropdown, Popconfirm, Progress,
 } from 'antd';
@@ -6,7 +6,7 @@ import { PlusOutlined, DownloadOutlined, UploadOutlined, CalculatorOutlined, Sea
 import api, { bulkUpsert } from '../../api/client';
 import { recalcAllTaxes } from '../../utils/taxRecalc';
 import type { SocialWelfareSet, HousingFundSet, EmployeeWelfareRecord } from '../../types';
-import { calcSocial, calcHousingFund } from '../../utils/welfareCalc';
+import { calcSocial, calcHousingFund, type BaseMinHistoryRow } from '../../utils/welfareCalc';
 import { exportXlsx, importXlsx, type ExportDef } from '../../utils/importExport';
 import { withSource } from '../../components/SourceTag';
 import FitHeightTable from '../../components/FitHeightTable';
@@ -127,6 +127,9 @@ const EmployeeWelfare: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<any>(null);
 
+  // 各险种最低基数历史调整（按月份生效）
+  const baseMinHistoryRef = useRef<BaseMinHistoryRow[]>([]);
+
   // 筛选器
   const [fPayCompany, setFPayCompany] = useState<string>();
   const [fDepartment, setFDepartment] = useState<string>();
@@ -141,16 +144,19 @@ const EmployeeWelfare: React.FC = () => {
     setLoading(true);
     try {
       await ensureRoster(period);
-      const [empRes, sRes, hRes, recRes] = await Promise.all([
+      const [empRes, sRes, hRes, recRes, histRes] = await Promise.all([
         api.get(`/employees?select=unique_hash,name,status,pay_company,cost_center,department,report_to,position,entry_date,leave_date,attendance_type&period=eq.${period}`),
         api.get('/social_welfare_sets?select=*&order=code'),
         api.get('/housing_fund_sets?select=*&order=code'),
         api.get(`/employee_welfare_records?select=*&period=eq.${period}`),
+        // 迁移尚未执行时不影响页面加载
+        api.get('/social_base_min_history?select=*').catch(() => ({ data: [] })),
       ]);
       const empList: any[] = empRes.data;
       setEmployees(empList);
       setSocialSets(sRes.data);
       setHousingSets(hRes.data);
+      baseMinHistoryRef.current = histRes.data;
 
       const empMap: Record<string, any> = {};
       empList.forEach((e: any) => { empMap[e.unique_hash] = e; });
@@ -283,7 +289,7 @@ const EmployeeWelfare: React.FC = () => {
     const housingBase = Number(v.housing_base || 0);
     const suppBase = Number(v.supp_base || housingBase);
 
-    const social = sSet.code === 'SI-00' ? null : calcSocial(sSet as any, socialBase);
+    const social = sSet.code === 'SI-00' ? null : calcSocial(sSet as any, socialBase, { period, history: baseMinHistoryRef.current });
     const housing = hSet.code === 'HF-00' ? null : calcHousingFund(hSet as any, housingBase, suppBase, v.supp_enabled);
 
     // 组装计算结果
@@ -372,7 +378,7 @@ const EmployeeWelfare: React.FC = () => {
         const housingBase = Number(v.housing_base || 0);
         const suppBase = Number(v.supp_base || housingBase);
 
-        const social = sSet.code === 'SI-00' ? null : calcSocial(sSet as any, socialBase);
+        const social = sSet.code === 'SI-00' ? null : calcSocial(sSet as any, socialBase, { period, history: baseMinHistoryRef.current });
         const housing = hSet.code === 'HF-00' ? null : calcHousingFund(hSet as any, housingBase, suppBase, v.supp_enabled);
 
         const psAdj = Number(v.personal_social_adj || 0);
